@@ -160,7 +160,7 @@ const MyComponent = defineComponent({
         'manual breaks': '',
       },
       minRadius: 5,
-      maxRadius: 50,
+      maxRadius: 5000,
       showCustomBreakpoints: false,
       viewId: `xyt-id-${Math.floor(1e12 * Math.random())}` as any,
       configId: `gui-config-${Math.floor(1e12 * Math.random())}` as any,
@@ -543,10 +543,10 @@ const MyComponent = defineComponent({
           if (!totalRows) this.setFirstZoom(event.data.coordinates, rows)
           // save layer data
           totalRows += rows
-          this.timeRange = [
-            Math.min(this.timeRange[0], event.data.time[0]),
-            Math.max(this.timeRange[1], event.data.time[rows - 1]),
-          ]
+          this.timeRange = [0, 86399]
+          //   Math.min(this.timeRange[0], event.data.time[0]),
+          //   Math.max(this.timeRange[1], event.data.time[rows - 1]),
+          // ]
           this.pointLayers.push(event.data)
         }
       }
