@@ -16,11 +16,11 @@ import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 
 import { FileSystemConfig } from '@/Globals'
-import TripExplorer from '@/plugins/imove-trip-exlorer/TripExplorer.vue'
+import TripExplorer from '@/plugins/imove-trip-explorer/TripExplorer.vue'
 import DashboardDataManager from '@/js/DashboardDataManager'
 
 export default defineComponent({
-  name: 'LinksPanel',
+  name: 'ImovePanel',
   components: { TripExplorer },
   props: {
     fileSystemConfig: { type: Object as PropType<FileSystemConfig>, required: true },
@@ -30,7 +30,7 @@ export default defineComponent({
     datamanager: Object as PropType<DashboardDataManager>,
   },
   mounted() {
-    // this.$emit('isLoaded')
+    this.$emit('isLoaded')
   },
   methods: {
     isLoaded() {
@@ -49,8 +49,6 @@ export default defineComponent({
   bottom: 0;
   left: 0;
   right: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 @media only screen and (max-width: 640px) {

@@ -5,11 +5,14 @@
 
   .details-panel
     h3.center RELIABILITY EXPLORER
-    br
-    p.center(v-if="!numTrips") Select an intersection.
-    .statistics(v-else)
+    p.center
+      br
+      | {{ numTrips ? '&nbsp;' : 'Select an intersection.' }}
+
+    .statistics
       h3 Trips
       h4(v-if="numTrips") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found
+      h4(v-else) &nbsp;
 
       br
       p Day of Week
@@ -29,7 +32,19 @@
 
       br
       br
+
+    .reliability
       h3 Reliability
+      p Speed by time of day
+      br
+      p: b Average speed: {{ Math.round(10* avgSpeed) / 10 }}
+
+      vue-plotly.myplot(v-if="speedData.length"
+        :data="speedData"
+        :layout="layout"
+        :options="options"
+        id="speed-plot"
+      )
 
   .plot-container(:id="`container-${linkLayerId}`")
     link-layer.map-area(
@@ -95,13 +110,22 @@ import readBlob from 'read-blob'
 import YAML from 'yaml'
 
 import globalStore from '@/store'
-import { MAP_STYLES_OFFLINE, DataTableColumn, DataTable, DataType, LookupDataset } from '@/Globals'
+import {
+  MAP_STYLES_OFFLINE,
+  DataTableColumn,
+  DataTable,
+  DataType,
+  LookupDataset,
+  UI_FONT,
+  BG_COLOR_DASHBOARD,
+} from '@/Globals'
 // import FilterPanel from './BadFilterPanel.vue'
 import SelectorPanel from './SelectorPanel.vue'
 import LinkLayer from './LinkLayer'
 import HTTPFileSystem from '@/js/HTTPFileSystem'
 import DrawingTool from '@/components/DrawingTool/DrawingTool.vue'
 import VizConfigurator from '@/components/viz-configurator/VizConfigurator.vue'
+import VuePlotly from '@/components/VuePlotly.vue'
 import ZoomButtons from '@/components/ZoomButtons.vue'
 import LegendStore from '@/js/LegendStore'
 import Coords from '@/js/Coords'
@@ -131,6 +155,7 @@ const MyComponent = defineComponent({
     LinkLayer,
     ToggleButton,
     VizConfigurator,
+    VuePlotly,
     ZoomButtons,
   },
   props: {
@@ -145,8 +170,62 @@ const MyComponent = defineComponent({
     return {
       selectedPaths: [] as any[],
       numTrips: 0,
+      avgSpeed: 0,
       dayOfWeek: ['is-warning', 'is-warning', 'is-warning', 'is-warning', 'is-warning', '', ''],
       vehType: ['is-success', '', ''],
+      currentCoord: [] as number[],
+      radius: 0.0002,
+      speedData: [] as any[],
+      globalState: globalStore.state,
+      layout: {
+        paper_bgcolor: BG_COLOR_DASHBOARD.dark,
+        plot_bgcolor: BG_COLOR_DASHBOARD.dark,
+        font: { family: UI_FONT, color: '#cccccc' },
+        height: 300,
+        margin: { t: 8, b: 0, l: 0, r: 0, pad: 2 },
+        xaxis: {
+          automargin: true,
+          autorange: true,
+          title: { text: 'Hour', standoff: 12 },
+          animate: true,
+        },
+        yaxis: {
+          automargin: true,
+          autorange: true,
+          title: { text: 'Speed', standoff: 16 },
+          animate: true,
+        },
+        legend: false,
+        // {
+        //   orientation: 'h',
+        //   x: 1,
+        //   y: 1,
+        // },
+      },
+      options: {
+        displaylogo: false,
+        responsive: true,
+        modeBarButtonsToRemove: [
+          'pan2d',
+          'zoom2d',
+          'select2d',
+          'lasso2d',
+          'zoomIn2d',
+          'zoomOut2d',
+          'autoScale2d',
+          'hoverClosestCartesian',
+          'hoverCompareCartesian',
+          'resetScale2d',
+          'toggleSpikelines',
+          'resetViewMapbox',
+        ],
+        toImageButtonOptions: {
+          format: 'png', // one of png, svg, jpeg, webp
+          filename: 'scatter-plot',
+          width: null,
+          height: null,
+        },
+      },
 
       standaloneYAMLconfig: {
         title: '',
@@ -490,11 +569,71 @@ const MyComponent = defineComponent({
       }
     },
 
-    handleClick(event: any) {
+    async handleClick(event: any) {
       console.log('GOT YOU:', event)
       if (event.coordinate) {
-        this.clickedCoordinate(event.coordinate)
+        await this.clickedCoordinate(event.coordinate)
+        await this.runStatisticsForCoord(event.coordinate)
       }
+    },
+
+    async runStatisticsForCoord(coord: number[]) {
+      this.currentCoord = coord
+      console.log('number of PATHS:', this.selectedPaths)
+      const lonLo = coord[0] - this.radius
+      const lonHi = coord[0] + this.radius
+      const latLo = coord[1] - this.radius
+      const latHi = coord[1] + this.radius
+
+      const data = { time: [], speeds: [] } as any
+
+      for (const selectedPath of this.selectedPaths) {
+        const path = selectedPath.path
+        console.log('  number of POINTS:', path.length)
+
+        let lastSelectedPointIndex = 0
+        for (let i = 0; i < path.length; i++) {
+          const p = path[i]
+          if (p[0] >= lonLo && p[0] <= lonHi && p[1] >= latLo && p[1] <= latHi) {
+            lastSelectedPointIndex = i
+          }
+        }
+        console.log('  i:', lastSelectedPointIndex)
+
+        // might be at end of array, don't panic
+        try {
+          const speed = selectedPath.speeds[lastSelectedPointIndex]
+          const startTime = parseInt(selectedPath.startTime.substring(0, 2))
+          if (speed == 0) continue
+
+          data.time.push(startTime)
+          data.speeds.push(speed)
+        } catch (e) {
+          console.warn('bad index')
+          // ignore for now
+        }
+
+        // calc average
+        const sum = data.speeds.reduce((a: number, b: number) => a + b)
+        const avgSpeed = sum / data.speeds.length
+        this.avgSpeed = avgSpeed
+      }
+      console.log(data)
+
+      this.speedData = [
+        {
+          x: data.time,
+          y: data.speeds,
+          name: 'Speed by Hour',
+          mode: 'markers',
+          type: 'scatter',
+          textinfo: 'label+percent',
+          textposition: 'inside',
+          automargin: true,
+          showlegend: false,
+          marker: { size: 3, color: '#ff4' },
+        },
+      ]
     },
 
     async clickedCoordinate(coord: number[]) {
@@ -535,19 +674,20 @@ const MyComponent = defineComponent({
         console.log('path length:', pathUrl.length)
         const paths = await fetch(pathUrl).then(response => response.json())
 
-        for (const path of paths) {
-          const snappedPath = path.Path1
+        for (const trip of paths) {
+          const snappedPath = trip.Path1
           const coords = snappedPath
             .split(',')
             .map((point: string) => point.split(' ').map(p => parseFloat(p)))
-          selectedPaths.push({ path: coords })
+
+          const speeds = trip.Speed_path.split(',').map((speed: any) => parseFloat(speed))
+
+          selectedPaths.push({ path: coords, speeds, startTime: trip.start_time })
         }
         this.selectedPaths = [...selectedPaths]
         await this.$nextTick()
         i += chunk
       }
-
-      // this.selectedPaths = selectedPaths
     },
 
     handleNewFilter(columns: number[]) {
@@ -1110,8 +1250,6 @@ export default MyComponent
 @import '@/styles.scss';
 
 .link-volume-plot {
-  background: url('assets/thumbnail.jpg') no-repeat;
-  background-size: cover;
   min-height: $thumbnailHeight;
   display: flex;
   flex-direction: row-reverse;
@@ -1143,6 +1281,8 @@ export default MyComponent
   padding: 0.5rem 1rem;
   color: #eee;
   // border-left: 1px solid #557;
+  display: flex;
+  flex-direction: column;
 }
 .top-panel {
   pointer-events: auto;
@@ -1241,5 +1381,18 @@ input {
   margin: 0rem auto 5px 0px;
   border-radius: 3px;
   // width: 100%;
+}
+
+.statistics {
+  flex: 1;
+}
+
+.reliability {
+  flex: 1;
+  margin-bottom: 1rem;
+}
+
+.myplot {
+  margin-top: 0.5rem;
 }
 </style>
