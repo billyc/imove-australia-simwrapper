@@ -53,24 +53,10 @@ npm run serve
 npm run build
 ```
 
-### Run your unit tests
-
-Well... I have not written tests but the infrastructure is there to use `jest`.
-
-```
-npm run test:unit
-```
-
-### Pushing to the live site
-
-Travis-CI is configured to automatically build the site with **every push to master**, so don't push to master until you are ready for your code to go live.
-
-- Travis config is in `.travis.yml`
-
 ## Project Layout
 
 - `/src`: all TypeScript and Vue files go here
-- `/src/svnConfig.ts`: this file defines the file storage locations available on the front page. The `svn` parameter must be a valid URL pointing to an http fileserver, running either Apache, subversion, or SimpleFileServer. Other file storage could be written and placed in `/src/util`.
+- `/src/fileSystemConfig.ts`: this file defines the file storage locations available on the front page. The `svn` parameter must be a valid URL pointing to an http fileserver, running either Apache, subversion, or SimpleFileServer. Other file storage could be written and placed in `/src/util`.
 - `/src/assets`: images, .csvs, etc that get packaged by webpack
 - `/src/components`: shared Vue components go here
 - `/src/layers`: shared deck.gl layer files go here
