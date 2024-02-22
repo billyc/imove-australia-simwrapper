@@ -35,6 +35,13 @@ let fileSystems: FileSystemConfig[] = [
   // DO NOT REMOVE THESE, THEY ARE FOR INTERNAL APP USE
   {
     name: webLiveHostname + ' live folders',
+    slug: 'SITE',
+    description: '/public/data files"',
+    baseURL: '/',
+    hidden: true,
+  },
+  {
+    name: webLiveHostname + ' live folders',
     slug: 'live',
     description: 'Files served using "simwrapper here"',
     baseURL: websiteLiveHost + ':8050/_f_', // e.g. 'http://localhost:8050/_f_',

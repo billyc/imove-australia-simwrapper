@@ -1,3 +1,5 @@
+export const SINGLE_SITE_MODE = true
+
 export const DEFAULT_PROJECTION = ''
 
 export const MAP_STYLES_ONLINE = {

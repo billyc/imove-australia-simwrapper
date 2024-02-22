@@ -1,7 +1,13 @@
 import micromatch from 'micromatch'
 import pako from 'pako'
 
-import { DirectoryEntry, FileSystemAPIHandle, FileSystemConfig, YamlConfigs } from '@/Globals'
+import {
+  SINGLE_SITE_MODE,
+  DirectoryEntry,
+  FileSystemAPIHandle,
+  FileSystemConfig,
+  YamlConfigs,
+} from '@/Globals'
 
 const YAML_FOLDERS = ['simwrapper', '.simwrapper']
 
@@ -67,7 +73,13 @@ class HTTPFileSystem {
     // console.log('CLEAN2: ', path)
 
     // sanity: /parent/my/../etc  => /parent/etc
-    path = new URL(path).href
+
+    // SINGLE_SITE_MODE gets all files from /public/data:
+    if (SINGLE_SITE_MODE) {
+      path = '/data' + path
+    } else {
+      path = new URL(path).href
+    }
 
     return path
   }
@@ -90,7 +102,13 @@ class HTTPFileSystem {
     //   headers['Authorization'] = `Basic ${credentials}`
     // }
 
-    const myRequest = new Request(path, { headers })
+    let myRequest = new Request(path, { headers })
+
+    // SINGLE_SITE_MODE directory request always needs to force append index.html
+    if (SINGLE_SITE_MODE && path.endsWith('/')) {
+      myRequest = new Request(path + '/index.html', { headers })
+    }
+
     const response = await fetch(myRequest).then(response => {
       // Check HTTP Response code: 200 is OK, everything else is a problem
       if (response.status != 200) {
@@ -274,7 +292,8 @@ class HTTPFileSystem {
 
   async getDirectoryFromURL(stillScaryPath: string) {
     // console.log(stillScaryPath)
-    const response = await this._getFileResponse(stillScaryPath).then()
+    const response = await this._getFileResponse(stillScaryPath)
+
     const htmlListing = await response.text()
     // console.log(htmlListing)
     const dirEntry = this.buildListFromHtml(htmlListing)
@@ -306,7 +325,7 @@ class HTTPFileSystem {
     }
 
     // also add current working folder as final option, which supersedes all others
-    configFolders.push(folder)
+    configFolders.push(folder || '/')
 
     // find all dashboards, topsheets, and viz-* yamls in each configuration folder.
     // Overwrite keys as we go; identically-named configs from parent folders get superceded as we go.

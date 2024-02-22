@@ -159,7 +159,7 @@ import TopNavBar from './TopNavBar.vue'
 
 import LeftIconPanel, { Section } from './LeftIconPanel.vue'
 import ErrorPanel from '@/components/left-panels/ErrorPanel.vue'
-import { FileSystemConfig } from '@/Globals'
+import { FileSystemConfig, SINGLE_SITE_MODE } from '@/Globals'
 
 const BASE_URL = import.meta.env.BASE_URL
 const DEFAULT_LEFT_WIDTH = 250
@@ -277,7 +277,102 @@ export default defineComponent({
       this.firstPanelProjectFolder = folder
     },
 
+    buildSingleSiteLayout() {
+      // "Single Site" mode doesn't have any of the multi-root stuff:
+      // just display things in the /public/data folder.
+
+      let pathMatch = this.$route.params.pathMatch
+      if (pathMatch.startsWith('/')) pathMatch = pathMatch.slice(1)
+
+      // split panel?
+      if (pathMatch.startsWith('split/')) {
+        const payload = pathMatch.substring(6)
+        try {
+          const content = atob(payload)
+          const json = JSON.parse(content)
+          this.panels = json
+        } catch (e) {
+          // couldn't do
+          console.error('PARSING SPLIT' + e)
+          this.$router.replace('/')
+        }
+        return
+      }
+
+      // figure out project root and subfolder
+      let root = 'SITE'
+      let xsubfolder = pathMatch
+      if (xsubfolder.startsWith('/')) xsubfolder = xsubfolder.slice(1)
+      if (xsubfolder.endsWith('/')) xsubfolder = xsubfolder.slice(0, -1)
+
+      // single visualization?
+      const fileNameWithoutPath = pathMatch.substring(1 + pathMatch.lastIndexOf('/'))
+      const lowerCaseFileName = fileNameWithoutPath.toLocaleLowerCase()
+
+      for (const vizPlugin of globalStore.state.visualizationTypes.values()) {
+        // be case insensitive for the matching itself
+        if (micromatch.isMatch(lowerCaseFileName, vizPlugin.filePatterns)) {
+          // plugin matched!
+          if (this.panels.length === 1 && this.panels[0].length === 1) {
+            this.panels = [[this.panels[0][0]]]
+          } else {
+            let key = Math.random()
+            let subfolder = xsubfolder.substring(0, xsubfolder.lastIndexOf('/'))
+            if (subfolder.startsWith('/')) subfolder = subfolder.slice(1)
+            this.panels = [
+              [
+                {
+                  key,
+                  component: vizPlugin.kebabName,
+                  title: '',
+                  description: '',
+                  props: {
+                    root,
+                    subfolder, /// : xsubfolder.substring(0, xsubfolder.lastIndexOf('/')),
+                    yamlConfig: fileNameWithoutPath,
+                    thumbnail: false,
+                  } as any,
+                },
+              ],
+            ]
+          }
+
+          // this.$store.commit('setShowLeftBar', false)
+          return
+        }
+      }
+
+      // Last option: folder browser/dashboard panel
+      let key = Math.random()
+      if (this.panels.length === 1 && this.panels[0].length === 1) key = this.panels[0][0].key
+
+      // figure out filesystem
+      const svnProjects: FileSystemConfig[] = this.$store.state.svnProjects.filter(
+        (a: any) => a.slug === root
+      )
+      if (!svnProjects.length) throw Error('no such project')
+      const fileSystem = svnProjects[0]
+
+      const folder = xsubfolder.startsWith('/') ? xsubfolder.slice(1) : xsubfolder
+
+      const lastFolder = folder.substring(1 + folder.lastIndexOf('/'))
+      const title = lastFolder || fileSystem.name
+
+      this.panels = [
+        [
+          {
+            key,
+            title,
+            component: 'TabbedDashboardView',
+            props: { root, xsubfolder: folder } as any,
+          },
+        ],
+      ]
+    },
+
     buildLayoutFromURL() {
+      if (SINGLE_SITE_MODE) return this.buildSingleSiteLayout()
+
       let pathMatch = this.$route.params.pathMatch
       if (pathMatch.startsWith('/')) pathMatch = pathMatch.slice(1)
 
