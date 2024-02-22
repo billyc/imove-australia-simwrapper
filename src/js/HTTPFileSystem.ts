@@ -109,6 +109,23 @@ class HTTPFileSystem {
       myRequest = new Request(path + '/index.html', { headers })
     }
 
+    function waitOneSecond() {
+      return new Promise(resolve => {
+        setTimeout(resolve, 2000)
+      })
+    }
+
+    if (SINGLE_SITE_MODE && path.indexOf('/?') > -1) {
+      const i = path.indexOf('/?')
+      const newPath = path.substring(0, i + 1) + 'index.html?' + path.substring(i + 2)
+      console.log(88, newPath)
+
+      // Example usage
+      await waitOneSecond()
+
+      myRequest = new Request(newPath, { headers })
+    }
+
     const response = await fetch(myRequest).then(response => {
       // Check HTTP Response code: 200 is OK, everything else is a problem
       if (response.status != 200) {

@@ -22,7 +22,8 @@
         )
 
   .dashboard-finder(:class="{isMultipanel, isZoomed}")
-    ul.dashboard-right-sections(v-show="!isZoomed && Object.keys(dashboards).length > 1")
+    //- ul.dashboard-right-sections(v-show="!isZoomed && Object.keys(dashboards).length > 1")
+    ul.dashboard-right-sections(v-show="false")
       li.tab-list(v-for="tab,index in Object.keys(dashboards)" :key="tab"
         :class="{'is-active': tab===activeTab, 'is-not-active': tab!==activeTab}"
         :style="{opacity: tab===activeTab ? 1.0 : 0.75}"
