@@ -28,6 +28,11 @@ export default {
   mounted() {
     this.$emit('isLoaded')
   },
+  methods: {
+    isLoaded() {
+      this.$emit('isLoaded')
+    },
+  },
 }
 </script>
 

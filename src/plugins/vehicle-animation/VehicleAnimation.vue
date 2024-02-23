@@ -28,16 +28,16 @@
         legend-colors.legend-block(v-if="legendItems.length"
           :title="`${$t('passengers')}:`" :items="legendItems")
 
-        legend-colors.legend-block(:title="`${$t('requests')}:`" :items="legendRequests")
+        //- legend-colors.legend-block(:title="`${$t('requests')}:`" :items="legendRequests")
 
-        .search-panel
-          p.speed-label(:style="{margin: '1rem 0 0 0'}") {{ $t('search') }}
-          form(autocomplete="off")
-          .field
-            p.control.has-icons-left
-              input.input.is-small(type="email" :placeholder="`${$t('search')}...`" v-model="searchTerm")
-              span.icon.is-small.is-left
-                i.fas.fa-search
+        //- .search-panel
+        //-   p.speed-label(:style="{margin: '1rem 0 0 0'}") {{ $t('search') }}
+        //-   form(autocomplete="off")
+        //-   .field
+        //-     p.control.has-icons-left
+        //-       input.input.is-small(type="email" :placeholder="`${$t('search')}...`" v-model="searchTerm")
+        //-       span.icon.is-small.is-left
+        //-         i.fas.fa-search
 
         settings-panel.settings-area(:items="SETTINGS" @click="handleSettingChange")
 
@@ -159,23 +159,27 @@ const MyComponent = defineComponent({
     const SETTINGS = {
       vehicles: true,
       routes: true,
-      requests: false,
+      // requests: false,
     } as any
 
     return {
       viewId: Math.floor(1e12 * Math.random()),
       COLOR_OCCUPANCY,
       SETTINGS,
-      legendItems: Object.keys(COLOR_OCCUPANCY).map(key => {
-        return {
-          type: LegendItemType.line,
-          color: COLOR_OCCUPANCY[key],
-          value: key,
-          label: key,
-        }
-      }),
+      legendItems: [
+        { type: LegendItemType.line, color: COLOR_OCCUPANCY[1], value: 1, label: 'Car' },
+        { type: LegendItemType.line, color: COLOR_OCCUPANCY[3], value: 3, label: 'HCV' },
+      ],
+      // legendItems: Object.keys(COLOR_OCCUPANCY).map(key => {
+      //   return {
+      //     type: LegendItemType.line,
+      //     color: COLOR_OCCUPANCY[key],
+      //     value: key,
+      //     label: key,
+      //   }
+      // }),
 
-      legendRequests: [{ type: LegendItemType.line, color: [255, 0, 255], value: 0, label: '' }],
+      legendRequests: [], // { type: LegendItemType.line, color: [255, 0, 255], value: 0, label: '' }],
 
       vizDetails: {
         network: '',
@@ -645,17 +649,14 @@ const MyComponent = defineComponent({
       let trips: any[] = []
       let drtRequests: any = []
 
+      const filename = this.myState.subfolder + '/' + this.vizDetails.drtTrips
       try {
         if (this.vizDetails.drtTrips.endsWith('json')) {
-          const json = await this.fileApi.getFileJson(
-            this.myState.subfolder + '/' + this.vizDetails.drtTrips
-          )
+          const json = await this.fileApi.getFileJson(filename)
           trips = json.trips
           drtRequests = json.drtRequests
         } else if (this.vizDetails.drtTrips.endsWith('gz')) {
-          const blob = await this.fileApi.getFileBlob(
-            this.myState.subfolder + '/' + this.vizDetails.drtTrips
-          )
+          const blob = await this.fileApi.getFileBlob(filename)
           const buffer = await blob.arrayBuffer()
           // recursively gunzip until it can gunzip no more:
           const unzipped = gUnzip(buffer)
@@ -666,6 +667,7 @@ const MyComponent = defineComponent({
         }
       } catch (e) {
         console.error(e)
+        this.$emit('error', 'Error loading: ' + filename)
         this.myState.statusMessage = '' + e
       }
       return { trips, drtRequests }

@@ -563,10 +563,10 @@ const MyComponent = defineComponent({
       const latitude = 0.5 * (coordinates[1] + coordinates[rows * 2 - 1])
 
       if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
-        globalStore.commit(
-          'setMapCamera',
-          Object.assign({}, globalStore.state.viewState, { longitude, latitude, zoom: 10 })
-        )
+        // globalStore.commit(
+        //   'setMapCamera',
+        //   Object.assign({}, globalStore.state.viewState, { longitude, latitude, zoom: 10 })
+        // )
       }
     },
 

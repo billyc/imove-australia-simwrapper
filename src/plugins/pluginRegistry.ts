@@ -9,6 +9,11 @@ const plugins = [
     component: defineAsyncComponent(() => import('./imove-trip-explorer/TripExplorer.vue')),
   },
   {
+    kebabName: 'imove-p2p',
+    filePatterns: ['**/viz-imove-p2p*.y?(a)ml'],
+    component: defineAsyncComponent(() => import('./imove-point-to-point/TripExplorer.vue')),
+  },
+  {
     kebabName: 'xmas-kelheim',
     filePatterns: ['**/xmas-kelheim*.y?(a)ml'],
     component: defineAsyncComponent(() => import('./xmas-kelheim/VehicleAnimation.vue')),

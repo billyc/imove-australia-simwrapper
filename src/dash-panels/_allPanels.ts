@@ -30,10 +30,11 @@ export const panelLookup: { [key: string]: AsyncComponent } = {
   // full-screen map visualizations:
   carriers: defineAsyncComponent(() => import('./carriers.vue')),
   flowmap: defineAsyncComponent(() => import('./flowmap.vue')),
-  imove: defineAsyncComponent(() => import('./imove.vue')),
   links: defineAsyncComponent(() => import('./links.vue')),
   map: defineAsyncComponent(() => import('./area-map.vue')),
   xytime: defineAsyncComponent(() => import('./xytime.vue')),
+  imove: defineAsyncComponent(() => import('./imove.vue')),
+  'imove-p2p': defineAsyncComponent(() => import('./imove-p2p.vue')),
 }
 
 // ----- EXPORT CHARTS HERE ---------------------------------------------------

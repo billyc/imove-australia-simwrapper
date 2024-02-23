@@ -173,7 +173,9 @@ const MyComponent = defineComponent({
       avgSpeed: 0,
       dayOfWeek: ['is-warning', 'is-warning', 'is-warning', 'is-warning', 'is-warning', '', ''],
       vehType: ['is-success', '', ''],
-      currentCoord: [] as number[],
+      // currentCoord: [] as number[],
+      startCoord: [] as number[],
+      endCoord: [] as number[],
       radius: 0.0002,
       speedData: [] as any[],
       globalState: globalStore.state,
@@ -648,7 +650,6 @@ const MyComponent = defineComponent({
       const trips = await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } }).then(
         response => response.json()
       )
-      // console.log({ trips })
 
       if (!trips.length) {
         this.selectedPaths = []

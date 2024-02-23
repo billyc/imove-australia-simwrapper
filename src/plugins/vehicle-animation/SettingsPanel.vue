@@ -21,7 +21,7 @@ const i18n = {
       passengers: 'Passengers',
       search: 'Search',
       showhide: 'Show/Hide',
-      vehicles: 'DRT Vehicles',
+      vehicles: 'Vehicles',
       routes: 'Routes',
       speed: 'Speed',
       backgroundTraffic: 'All Traffic',
@@ -43,7 +43,7 @@ import { defineComponent } from 'vue'
 import { ToggleButton } from 'vue-js-toggle-button'
 
 export default defineComponent({
-  name: 'XmasSettingsPanel',
+  name: 'XSettingsPanel',
   i18n,
   components: { ToggleButton },
   props: {
