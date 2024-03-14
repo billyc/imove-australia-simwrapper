@@ -667,7 +667,7 @@ const MyComponent = defineComponent({
 
       let i = 0
       while (i < this.numTrips) {
-        console.log(i)
+        console.log('loading', i)
         const tripIDs = trips
           .slice(i, i + chunk)
           .map((trip: any) => trip.TripID)

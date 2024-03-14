@@ -177,7 +177,7 @@ p {
 }
 
 .leftside {
-  margin-left: 7px;
+  margin-left: 10px;
 }
 
 @media only screen and (max-width: 640px) {

@@ -7,8 +7,8 @@ export default function Component(props: {
   values: number[]
   items: LegendItem[]
 }) {
-  const listItems = props.items.map(item => (
-    <li key={item.value + item.value[0]} style={{ display: 'flex' }}>
+  const listItems = props.items.map((item, i) => (
+    <li key={i} style={{ display: 'flex' }}>
       {item.label && (
         <div
           style={{

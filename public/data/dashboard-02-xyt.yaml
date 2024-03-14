@@ -1,0 +1,13 @@
+header:
+  tab: 'X/Y/T'
+  title: 'CompassIOT data exploration'
+  description: 'Full dataset'
+  fullScreen: true
+
+layout:
+  - type: 'xytime'
+    title: 'Trip starting locations'
+    file: sampled.trips_large.xyt.csv
+    projection: EPSG:4326
+    center: [145, -38]
+    radius: 350

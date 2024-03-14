@@ -237,7 +237,7 @@ const MyComponent = defineComponent({
       showHelp: false,
 
       speedStops: [-20, -10, -5, -2, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 2, 5, 10, 20],
-      speed: 10,
+      speed: 5,
 
       legendBits: [] as any[],
       isEmbedded: false,

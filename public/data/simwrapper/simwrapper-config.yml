@@ -1,0 +1,48 @@
+# SIMWRAPPER-CONFIG.YAML --------------------------
+# Place this file in a run folder or in a ".simwrapper" folder for project-wide
+# settings that will be propagated to ALL SUBFOLDERS.
+# Useful for defining project-wide layout and configuration
+
+# ######################################################################################
+# GENERAL SETTINGS
+
+hideLeftBar: true
+hideBreadcrumbs: true
+hideFiles: false
+fullWidth: true
+theme: dark
+
+# css: custom.css
+# header: header.md
+# footer: footer.md
+
+topNavBar:
+  style:
+    backgroundColor: '#333faa' # hex codes or CSS color names allowed
+
+  logo:
+    image: '/data/imove.png'
+    url: /data
+    stylei:
+      backgroundColor: '#333faa'
+      padding: '2px 4px'
+      maxHeight: '3.25rem'
+
+  left:
+    - text: 'iMOVE Australia'
+      url: ./base-case
+      style:
+        fontWeight: bold
+        fontFamily: 'Roboto Slab'
+        fontSize: 16px
+
+  right:
+    - text: 'Overview'
+      url: http://localhost:5173/
+    - text: 'Explore'
+      url: http://localhost:5173/
+    - text: 'Speeds'
+      url: http://localhost:5173/reliability
+    - text: 'Point-to-Point'
+      url: http://localhost:5173/point-to-point
+

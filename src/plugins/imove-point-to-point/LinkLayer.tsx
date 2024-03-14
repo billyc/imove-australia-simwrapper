@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import DeckGL from '@deck.gl/react'
 import { COORDINATE_SYSTEM } from '@deck.gl/core'
+import { ScatterplotLayer } from '@deck.gl/layers'
 
 import { OFFSET_DIRECTION } from '@/layers/LineOffsetLayer'
 import PathOffsetLayer from '@/layers/PathOffsetLayer'
@@ -33,6 +34,8 @@ export default function Component({
   mapIsIndependent = false,
   click = {} as any,
   paths = [] as any,
+  startCoord = [] as number[],
+  endCoord = [] as number[],
 }) {
   // ------- draw frame begins here -----------------------------
 
@@ -144,6 +147,22 @@ export default function Component({
   // projection == 'Atlantis' ? COORDINATE_SYSTEM.METER_OFFSETS : COORDINATE_SYSTEM.DEFAULT
   const coordinateSystem = COORDINATE_SYSTEM.DEFAULT
 
+  const points = []
+  if (startCoord.length) points.push({ coord: startCoord, color: [255, 64, 128] })
+  if (endCoord.length) points.push({ coord: endCoord, color: [255, 64, 128] }) // [32, 238, 128] })
+
+  //@ts-ignore
+  const pointLayer = new ScatterplotLayer({
+    id: 'point-layer',
+    data: points,
+    radiusScale: 1.0,
+    radiusMinPixels: 15,
+    getPosition: (d: any) => d.coord,
+    getFillColor: (d: any) => d.color,
+    getRadius: 1,
+    opacity: 0.5,
+  })
+
   //@ts-ignore
   const layer = new PathOffsetLayer({
     id: 'pathLayer',
@@ -184,7 +203,7 @@ export default function Component({
     /*
     //@ts-ignore */
     <DeckGL
-      layers={[layer]}
+      layers={[layer, pointLayer]}
       viewState={viewState}
       controller={true}
       pickingRadius={5}

@@ -4,18 +4,24 @@
         oncontextmenu="return false")
 
   .details-panel
-    h3.center RELIABILITY EXPLORER
-    p.center
-      br
-      | {{ numTrips ? '&nbsp;' : 'Select an intersection.' }}
+    h3.center POINT-TO-POINT
 
-    .statistics
-      h3 Trips
-      h4(v-if="numTrips") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found
-      h4(v-else) &nbsp;
+    //- b-button(@click="clearMap()" type="is-warning") Clear
 
-      br
-      p Day of Week
+    p.button-section Start Time
+    .flex-row
+      .flex1: b-button.is-small(expanded @click="toggleTime(0)" :type="timeOfDay[0]") All
+      .flex1: b-button.is-small(expanded @click="toggleTime(1)" :type="timeOfDay[1]") 7am-9am
+      .flex1: b-button.is-small(expanded @click="toggleTime(2)" :type="timeOfDay[2]") 11am-2pm
+      .flex1: b-button.is-small(expanded @click="toggleTime(3)" :type="timeOfDay[3]") 4pm-6pm
+
+    p.button-section Day of Week
+    .flex-row
+      .flex1: b-button.is-small(expanded @click="toggleDay(7)" :type="dayOfWeek[7]") All
+      .flex1: b-button.flex1.is-small(expanded @click="toggleDay(8)" :type="dayOfWeek[8]") Mo-Fr
+      .flex1: b-button.flex1.is-small(expanded @click="toggleDay(9)" :type="dayOfWeek[9]") Sa-Su
+
+    .flex(v-show="false")
       b-button.is-small(@click="toggleDay(0)" :type="dayOfWeek[0]") Mo
       b-button.is-small(@click="toggleDay(1)" :type="dayOfWeek[1]") Tu
       b-button.is-small(@click="toggleDay(2)" :type="dayOfWeek[2]") We
@@ -23,12 +29,17 @@
       b-button.is-small(@click="toggleDay(4)" :type="dayOfWeek[4]") Fr
       b-button.is-small(@click="toggleDay(5)" :type="dayOfWeek[5]") Sa
       b-button.is-small(@click="toggleDay(6)" :type="dayOfWeek[6]") Su
-      br
-      br
-      p Vehicle Types
-      b-button.is-small(@click="toggleVehicle(0)" :type="vehType[0]") All
-      b-button.is-small(@click="toggleVehicle(1)" :type="vehType[1]") Cars
-      b-button.is-small(@click="toggleVehicle(2)" :type="vehType[2]") HCV
+
+    p.button-section Vehicle Types
+    .flex-row
+      .flex1: b-button.is-small(expanded @click="toggleVehicle(0)" :type="vehType[0]") All
+      .flex1: b-button.is-small(expanded @click="toggleVehicle(1)" :type="vehType[1]") Cars
+      .flex1: b-button.is-small(expanded @click="toggleVehicle(2)" :type="vehType[2]") HCV
+
+    .statistics
+      h3 Trips
+      h4(v-if="numTrips > 0") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found
+      h4(v-else) &nbsp;
 
       br
       br
@@ -63,39 +74,18 @@
         :mapIsIndependent="vizDetails.mapIsIndependent"
         :click="handleClick"
         :paths="selectedPaths"
+        :startCoord="startCoord"
+        :endCoord="endCoord"
     )
 
-    zoom-buttons.zoom-buttons(v-if="!thumbnail")
-    //- drawing-tool(v-if="!thumbnail")
+    zoom-buttons.zoom-buttons(v-if="!thumbnail" corner="top-left")
 
-    .bottom-panel(v-if="!thumbnail")
+    .top-panel(v-show="numTrips <= 0")
+      p {{ numTrips == -1 ? 'No trips pass between those points. Zoom in, try again' : prompt[numIntersectionsSelected] }}
+
+    .bottom-panel
       .status-message(v-if="myState.statusMessage")
         p {{ myState.statusMessage }}
-
-      .panel-items(v-show="csvWidth.activeColumn")
-
-        //- slider/dropdown for selecting column
-        .panel-item.config-section
-          selector-panel(
-            :vizDetails="vizDetails"
-            :csvData="csvWidth"
-            :scaleWidth="scaleWidth"
-            :showDiffs="vizDetails.showDifferences"
-            @column="handleNewDataColumn"
-            @slider="handleNewDataColumn"
-          )
-
-        //- DIFF checkbox
-        .panel-item.diff-section(v-if="vizDetails.datasets.csvBase")
-          toggle-button.toggle(:width="40" :value="vizDetails.showDifferences" :sync="true" :labels="false"
-            :color="{checked: '#4b7cc4', unchecked: '#222'}"
-            @change="toggleShowDiffs")
-          p: b {{ $t('showDiffs') }}
-
-        //- FilterPanel.filter-panel(v-if="vizDetails.useSlider"
-        //-   :props="csvWidth"
-        //-   @activeColumns="handleNewFilter"
-        //- )
 
 </template>
 
@@ -126,7 +116,7 @@ import HTTPFileSystem from '@/js/HTTPFileSystem'
 import DrawingTool from '@/components/DrawingTool/DrawingTool.vue'
 import VizConfigurator from '@/components/viz-configurator/VizConfigurator.vue'
 import VuePlotly from '@/components/VuePlotly.vue'
-import ZoomButtons from '@/components/ZoomButtons.vue'
+import ZoomButtons, { Corner } from '@/components/ZoomButtons.vue'
 import LegendStore from '@/js/LegendStore'
 import Coords from '@/js/Coords'
 import { arrayBufferToBase64 } from '@/js/util'
@@ -168,14 +158,17 @@ const MyComponent = defineComponent({
   },
   data() {
     return {
+      prompt: ['Select an intersection on the map', 'Select second intersection', ''],
       selectedPaths: [] as any[],
       numTrips: 0,
       avgSpeed: 0,
       dayOfWeek: ['is-warning', 'is-warning', 'is-warning', 'is-warning', 'is-warning', '', ''],
+      timeOfDay: ['is-success', '', ''],
       vehType: ['is-success', '', ''],
-      // currentCoord: [] as number[],
+      currentCoord: [] as number[],
       startCoord: [] as number[],
       endCoord: [] as number[],
+      numIntersectionsSelected: 0,
       radius: 0.0002,
       speedData: [] as any[],
       globalState: globalStore.state,
@@ -412,9 +405,22 @@ const MyComponent = defineComponent({
     },
   },
   methods: {
+    clearMap() {
+      this.startCoord = []
+      this.endCoord = []
+      this.numTrips = 0
+      this.numIntersectionsSelected = 0
+      this.selectedPaths = []
+    },
+
     toggleDay(i: number) {
       this.dayOfWeek[i] = this.dayOfWeek[i] ? '' : 'is-warning'
       this.dayOfWeek = [...this.dayOfWeek]
+    },
+
+    toggleTime(i: number) {
+      this.timeOfDay = ['', '', '']
+      this.timeOfDay[i] = 'is-success'
     },
 
     toggleVehicle(i: number) {
@@ -573,10 +579,17 @@ const MyComponent = defineComponent({
 
     async handleClick(event: any) {
       console.log('GOT YOU:', event)
-      if (event.coordinate) {
-        await this.clickedCoordinate(event.coordinate)
-        await this.runStatisticsForCoord(event.coordinate)
+
+      try {
+        if (event.coordinate) {
+          await this.clickedCoordinate(event.coordinate)
+          // await this.runStatisticsForCoord(event.coordinate)
+        }
+      } catch (e) {
+        console.error('bad!' + e)
+        this.numTrips = -1
       }
+      console.log(this.numTrips)
     },
 
     async runStatisticsForCoord(coord: number[]) {
@@ -639,40 +652,83 @@ const MyComponent = defineComponent({
     },
 
     async clickedCoordinate(coord: number[]) {
-      const [lon, lat] = coord
-      console.log({ lon, lat })
+      if (this.numIntersectionsSelected == 0) this.startCoord = coord
+      if (this.numIntersectionsSelected == 1) this.endCoord = coord
+      this.numIntersectionsSelected++
+
+      if (this.numIntersectionsSelected == 3) {
+        this.clearMap()
+      }
+
+      // all done if we do not have BOTH start and end selected
+      if (this.numIntersectionsSelected !== 2) return
 
       const server = this.vizDetails.server
 
-      // GET TRIP LIST
-      const url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
+      // GET START TRIP LIST
+      const [lon, lat] = this.startCoord
+      console.log({ lon, lat })
+      let url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
       console.log(url)
-      const trips = await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } }).then(
-        response => response.json()
-      )
+      const startTrips = await (
+        await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } })
+      ).json()
 
-      if (!trips.length) {
+      if (!startTrips.length) {
         this.selectedPaths = []
         this.numTrips = 0
         return
       }
 
+      // GET END TRIP LIST
+      const [lon2, lat2] = this.endCoord
+      console.log({ lon2, lat2 })
+      url = `${server}/location?lon=${lon2}&lat=${lat2}&radius=0.0002`
+      console.log(url)
+      const endTrips = await (
+        await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } })
+      ).json()
+
+      if (!endTrips.length) {
+        this.selectedPaths = []
+        this.numTrips = 0
+        return
+      }
+
+      // FIGURE OUT UNION
+      const startT = startTrips.map((t: any) => t.TripID)
+      const endT = endTrips.map((t: any) => t.TripID)
+      // console.log({ startT, endT })
+
+      const union = []
+      for (let TT of startT) {
+        if (endT.includes(TT)) union.push(TT)
+      }
+
       // BUILD PATHS
       const selectedPaths = [] as any[]
 
-      // GET FULL PATHS FOR SELECTED TRIPS
-      this.numTrips = trips.length
+      // GET FULL PATHS FOR SELECTED (but unfiltered) TRIPS
+      const numUnfilteredTrips = union.length
+      console.log('UNFILTERED trips', numUnfilteredTrips)
+
+      if (numUnfilteredTrips == 0) {
+        // NO NEW TRIPS
+        this.numTrips = -1
+        return
+      }
+
+      // build filters
 
       // only fetch 800 at a time due to URL length limits
       const chunk = 807
 
       let i = 0
-      while (i < this.numTrips) {
+      let numFilteredTrips = 0
+
+      while (i < numUnfilteredTrips) {
         console.log(i)
-        const tripIDs = trips
-          .slice(i, i + chunk)
-          .map((trip: any) => trip.TripID)
-          .join(',')
+        const tripIDs = union.slice(i, i + chunk).join(',')
         const pathUrl = `${server}/path?trip=${tripIDs}`
         console.log('path length:', pathUrl.length)
         const paths = await fetch(pathUrl).then(response => response.json())
@@ -687,9 +743,13 @@ const MyComponent = defineComponent({
 
           selectedPaths.push({ path: coords, speeds, startTime: trip.start_time })
         }
+
         this.selectedPaths = [...selectedPaths]
         await this.$nextTick()
+
         i += chunk
+        numFilteredTrips += paths.length
+        this.numTrips = numFilteredTrips
       }
     },
 
@@ -1287,15 +1347,21 @@ export default MyComponent
   display: flex;
   flex-direction: column;
 }
+
 .top-panel {
+  position: absolute;
+  bottom: 4rem;
+  left: 5rem;
+  right: 5rem;
   pointer-events: auto;
-  grid-column: 1 / 2;
-  grid-row: 1 / 2;
-  background-color: var(--bgPanel);
-  margin: 0 auto auto 0;
-  padding: 0.5rem 1.5rem 1rem 1.5rem;
+  background-color: #3040b090;
+  padding: 0.5rem 1rem;
   z-index: 5;
-  box-shadow: 0px 2px 10px #22222244;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 18px;
+  border: 1px solid #bbb;
+  text-align: center;
 }
 
 .bottom-panel {
@@ -1397,5 +1463,18 @@ input {
 
 .myplot {
   margin-top: 0.5rem;
+}
+
+h2 {
+  line-height: 2.2rem;
+  margin-bottom: 1rem;
+}
+
+.button-section {
+  margin-top: 1rem;
+}
+
+.flex1 {
+  margin-right: 1px;
 }
 </style>

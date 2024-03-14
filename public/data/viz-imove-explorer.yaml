@@ -1,0 +1,6 @@
+title: 'iMove TRIP EXPLORER'
+description: 'Click on map to see trips that pass through that point'
+server: "http://127.0.0.1:5000"
+center: [145, -38]
+zoom: 9
+

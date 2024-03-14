@@ -588,7 +588,13 @@ export default defineComponent({
     this.fileList = await this.getFiles()
 
     await this.setupDashboard()
-    // await this.$nextTick()
+
+    // only one card? just zoom it
+    if (this.rows.length == 1 && this.rows[0].cards.length == 1) {
+      const card = this.rows[0].cards[0]
+      this.toggleZoom(card)
+    }
+
     this.resizeAllCards()
   },
   beforeDestroy() {
