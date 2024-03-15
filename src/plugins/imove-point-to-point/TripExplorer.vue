@@ -4,16 +4,14 @@
         oncontextmenu="return false")
 
   .details-panel
-    h3.center POINT-TO-POINT
-
-    //- b-button(@click="clearMap()" type="is-warning") Clear
+    h4.center: b POINT-TO-POINT
 
     p.button-section Start Time
     .flex-row
       .flex1: b-button.is-small(expanded @click="toggleTime(0)" :type="timeOfDay[0]") All
-      .flex1: b-button.is-small(expanded @click="toggleTime(1)" :type="timeOfDay[1]") 7am-9am
-      .flex1: b-button.is-small(expanded @click="toggleTime(2)" :type="timeOfDay[2]") 11am-2pm
-      .flex1: b-button.is-small(expanded @click="toggleTime(3)" :type="timeOfDay[3]") 4pm-6pm
+      .flex1: b-button.is-small(expanded @click="toggleTime(1)" :type="timeOfDay[1]") 8am-9am
+      .flex1: b-button.is-small(expanded @click="toggleTime(2)" :type="timeOfDay[2]") 1pm-2pm
+      .flex1: b-button.is-small(expanded @click="toggleTime(3)" :type="timeOfDay[3]") 5pm-6pm
 
     p.button-section Day of Week
     .flex-row
@@ -21,14 +19,14 @@
       .flex1: b-button.flex1.is-small(expanded @click="toggleDay(8)" :type="dayOfWeek[8]") Mo-Fr
       .flex1: b-button.flex1.is-small(expanded @click="toggleDay(9)" :type="dayOfWeek[9]") Sa-Su
 
-    .flex(v-show="false")
-      b-button.is-small(@click="toggleDay(0)" :type="dayOfWeek[0]") Mo
-      b-button.is-small(@click="toggleDay(1)" :type="dayOfWeek[1]") Tu
-      b-button.is-small(@click="toggleDay(2)" :type="dayOfWeek[2]") We
-      b-button.is-small(@click="toggleDay(3)" :type="dayOfWeek[3]") Th
-      b-button.is-small(@click="toggleDay(4)" :type="dayOfWeek[4]") Fr
-      b-button.is-small(@click="toggleDay(5)" :type="dayOfWeek[5]") Sa
-      b-button.is-small(@click="toggleDay(6)" :type="dayOfWeek[6]") Su
+    //- .flex(v-show="false")
+    //-   b-button.is-small(@click="toggleDay(0)" :type="dayOfWeek[0]") Mo
+    //-   b-button.is-small(@click="toggleDay(1)" :type="dayOfWeek[1]") Tu
+    //-   b-button.is-small(@click="toggleDay(2)" :type="dayOfWeek[2]") We
+    //-   b-button.is-small(@click="toggleDay(3)" :type="dayOfWeek[3]") Th
+    //-   b-button.is-small(@click="toggleDay(4)" :type="dayOfWeek[4]") Fr
+    //-   b-button.is-small(@click="toggleDay(5)" :type="dayOfWeek[5]") Sa
+    //-   b-button.is-small(@click="toggleDay(6)" :type="dayOfWeek[6]") Su
 
     p.button-section Vehicle Types
     .flex-row
@@ -37,18 +35,18 @@
       .flex1: b-button.is-small(expanded @click="toggleVehicle(2)" :type="vehType[2]") HCV
 
     .statistics
-      h3 Trips
-      h4(v-if="numTrips > 0") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found
+      h4: b Trips
+      p(v-if="numTrips > 0") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found
       h4(v-else) &nbsp;
 
-      br
-      br
-
-    .reliability
-      h3 Reliability
-      p Speed by time of day
-      br
-      p: b Average speed: {{ Math.round(10* avgSpeed) / 10 }}
+    .reliability(v-if="avgSpeed")
+      h4: b Speed Reliability, A to B
+      p
+        | Average speed:&nbsp;&nbsp;
+        b: span(style="color: yellow") {{ Math.round(10* avgSpeed) / 10 }} km/h
+      p
+        | Coeff. of variation:&nbsp;&nbsp;
+        b: span(style="color: yellow") {{ Math.round(10* cvSpeed) / 10 }}
 
       vue-plotly.myplot(v-if="speedData.length"
         :data="speedData"
@@ -96,6 +94,9 @@ import { ToggleButton } from 'vue-js-toggle-button'
 import { rgb } from 'd3-color'
 import { scaleThreshold, scaleOrdinal } from 'd3-scale'
 import { shallowEqualObjects } from 'shallow-equal'
+import { length } from '@turf/turf'
+import { mean, std } from 'mathjs'
+import moment from 'moment'
 import readBlob from 'read-blob'
 import YAML from 'yaml'
 
@@ -158,11 +159,14 @@ const MyComponent = defineComponent({
   },
   data() {
     return {
-      prompt: ['Select an intersection on the map', 'Select second intersection', ''],
+      prompt: ['Select an intersection on the map', 'Select second intersection', '...'],
       selectedPaths: [] as any[],
       numTrips: 0,
       avgSpeed: 0,
-      dayOfWeek: ['is-warning', 'is-warning', 'is-warning', 'is-warning', 'is-warning', '', ''],
+      cvSpeed: 0,
+      stdSpeed: 0,
+      unfilteredTrips: [] as any[],
+      dayOfWeek: ['', '', '', '', '', '', '', 'is-warning', '', ''],
       timeOfDay: ['is-success', '', ''],
       vehType: ['is-success', '', ''],
       currentCoord: [] as number[],
@@ -173,21 +177,21 @@ const MyComponent = defineComponent({
       speedData: [] as any[],
       globalState: globalStore.state,
       layout: {
-        paper_bgcolor: BG_COLOR_DASHBOARD.dark,
-        plot_bgcolor: BG_COLOR_DASHBOARD.dark,
+        paper_bgcolor: '#223', // BG_COLOR_DASHBOARD.dark,
+        plot_bgcolor: '#223', // BG_COLOR_DASHBOARD.dark,
         font: { family: UI_FONT, color: '#cccccc' },
-        height: 300,
-        margin: { t: 8, b: 0, l: 0, r: 0, pad: 2 },
+        height: 225,
+        margin: { t: 8, b: 2, l: 0, r: 0, pad: 2 },
         xaxis: {
           automargin: true,
           autorange: true,
-          title: { text: 'Hour', standoff: 12 },
+          title: { text: 'Distance, km', standoff: 12 },
           animate: true,
         },
         yaxis: {
           automargin: true,
           autorange: true,
-          title: { text: 'Speed', standoff: 16 },
+          title: { text: 'Seconds', standoff: 16 },
           animate: true,
         },
         legend: false,
@@ -414,19 +418,22 @@ const MyComponent = defineComponent({
     },
 
     toggleDay(i: number) {
-      this.dayOfWeek[i] = this.dayOfWeek[i] ? '' : 'is-warning'
-      this.dayOfWeek = [...this.dayOfWeek]
+      this.dayOfWeek = ['', '', '', '', '', '', '', '', '', '']
+      this.dayOfWeek[i] = 'is-warning'
+      this.updateFilter()
     },
 
     toggleTime(i: number) {
       this.timeOfDay = ['', '', '']
       this.timeOfDay[i] = 'is-success'
+      this.updateFilter()
     },
 
     toggleVehicle(i: number) {
       // radio buttons - only one selection
       this.vehType = ['', '', '']
       this.vehType[i] = 'is-success'
+      this.updateFilter()
     },
 
     setDataIsLoaded() {
@@ -592,54 +599,84 @@ const MyComponent = defineComponent({
       console.log(this.numTrips)
     },
 
-    async runStatisticsForCoord(coord: number[]) {
-      this.currentCoord = coord
-      console.log('number of PATHS:', this.selectedPaths)
-      const lonLo = coord[0] - this.radius
-      const lonHi = coord[0] + this.radius
-      const latLo = coord[1] - this.radius
-      const latHi = coord[1] + this.radius
+    runStatistics() {
+      const distanceAndTime = [] as any[]
+      let minDistance = Infinity
 
-      const data = { time: [], speeds: [] } as any
+      const feature = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [] as any,
+        },
+      } as any
 
-      for (const selectedPath of this.selectedPaths) {
-        const path = selectedPath.path
-        console.log('  number of POINTS:', path.length)
+      // loop on each path
+      for (const path of this.selectedPaths) {
+        let startIndex = -1
+        let endIndex = -1
 
-        let lastSelectedPointIndex = 0
-        for (let i = 0; i < path.length; i++) {
-          const p = path[i]
+        // first we look for a point within the starting point
+        let lonLo = this.startCoord[0] - this.radius
+        let lonHi = this.startCoord[0] + this.radius
+        let latLo = this.startCoord[1] - this.radius
+        let latHi = this.startCoord[1] + this.radius
+
+        for (let i = 0; i < path.path.length; i++) {
+          const p = path.path[i]
           if (p[0] >= lonLo && p[0] <= lonHi && p[1] >= latLo && p[1] <= latHi) {
-            lastSelectedPointIndex = i
+            startIndex = i
+            break
           }
         }
-        console.log('  i:', lastSelectedPointIndex)
+        if (startIndex < 0) continue
 
-        // might be at end of array, don't panic
-        try {
-          const speed = selectedPath.speeds[lastSelectedPointIndex]
-          const startTime = parseInt(selectedPath.startTime.substring(0, 2))
-          if (speed == 0) continue
+        // console.log('pathlength', path.path.length, 'startIndex', startIndex)
 
-          data.time.push(startTime)
-          data.speeds.push(speed)
-        } catch (e) {
-          console.warn('bad index')
-          // ignore for now
+        // then we look for end point and sum the travel times
+        lonLo = this.endCoord[0] - this.radius
+        lonHi = this.endCoord[0] + this.radius
+        latLo = this.endCoord[1] - this.radius
+        latHi = this.endCoord[1] + this.radius
+        for (let i = startIndex; i < path.path.length; i++) {
+          const p = path.path[i]
+          if (p[0] >= lonLo && p[0] <= lonHi && p[1] >= latLo && p[1] <= latHi) {
+            endIndex = i
+            break
+          }
         }
+        if (endIndex < 0) continue
 
-        // calc average
-        const sum = data.speeds.reduce((a: number, b: number) => a + b)
-        const avgSpeed = sum / data.speeds.length
-        this.avgSpeed = avgSpeed
+        // console.log(startIndex, endIndex)
+
+        // WE should have both now
+
+        feature.geometry.coordinates = path.path.slice(startIndex, endIndex + 1)
+        const distance = length(feature, { units: 'kilometers' })
+
+        // times
+        const startTime = moment(path.timestamps[startIndex], 'HH:mm:ss')
+        const endTime = moment(path.timestamps[endIndex - 1], 'HH:mm:ss')
+        const diffSeconds = endTime.diff(startTime) / 1000.0
+
+        // no zeroes please
+        if (diffSeconds) distanceAndTime.push([distance, diffSeconds])
+
+        // remember minimum distance
+        minDistance = Math.min(minDistance, distance)
       }
-      console.log(data)
 
+      // Clip outliers: drop distances greater than 150% of minimum distance
+      // because some trips are not directly between the two points
+      const clipValue = minDistance * 1.5
+      const clipped = distanceAndTime.filter(p => p[0] < clipValue)
+      console.log({ clipped })
       this.speedData = [
         {
-          x: data.time,
-          y: data.speeds,
-          name: 'Speed by Hour',
+          x: clipped.map(p => p[0]),
+          y: clipped.map(p => p[1]),
+          name: 'Travel Times from A to B',
           mode: 'markers',
           type: 'scatter',
           textinfo: 'label+percent',
@@ -649,6 +686,86 @@ const MyComponent = defineComponent({
           marker: { size: 3, color: '#ff4' },
         },
       ]
+
+      // calc metrics: avg speed, coeff of variance
+      const speeds = clipped.map(p => (3600 * p[0]) / p[1]) // km/hour
+      const meanSpeed = mean(speeds)
+      const stdSpeed = std(speeds) as any
+      const cv = stdSpeed / meanSpeed
+      console.log({ meanSpeed, stdSpeed, cv })
+
+      this.avgSpeed = meanSpeed
+      this.cvSpeed = cv
+      this.stdSpeed = stdSpeed
+
+      //   const sum = data.speeds.reduce((a: number, b: number) => a + b)
+      //   const avgSpeed = sum / data.speeds.length
+      //   this.avgSpeed = avgSpeed
+      // }
+    },
+
+    async updateFilter() {
+      console.log('update filter!', this.unfilteredTrips.length)
+      if (!this.unfilteredTrips.length) return
+
+      const selectedPaths = [] as any[]
+
+      // GET FULL PATHS FOR SELECTED (but unfiltered) TRIPS
+      const numUnfilteredTrips = this.unfilteredTrips.length
+      console.log('UNFILTERED trips', numUnfilteredTrips)
+
+      if (numUnfilteredTrips == 0) {
+        // NO NEW TRIPS
+        this.numTrips = -1
+        return
+      }
+
+      // build filters
+      let filters = ''
+      if (this.dayOfWeek[8]) filters += '&is_weekday=true'
+      if (this.dayOfWeek[9]) filters += '&is_weekday=false'
+      if (this.timeOfDay[1]) filters += '&start_time=08'
+      if (this.timeOfDay[2]) filters += '&start_time=13'
+      if (this.timeOfDay[3]) filters += '&start_time=17'
+      if (this.vehType[1]) filters += '&veh_type=car'
+      if (this.vehType[2]) filters += '&veh_type=HCV'
+      console.log(111, filters)
+
+      // only fetch 800 at a time due to URL length limits
+      const chunk = 807
+
+      let i = 0
+      let numFilteredTrips = 0
+
+      while (i < numUnfilteredTrips) {
+        console.log(i)
+        const tripIDs = this.unfilteredTrips.slice(i, i + chunk).join(',')
+        const pathUrl = `${this.vizDetails.server}/path?trip=${tripIDs}${filters}`
+        console.log('path length:', pathUrl.length)
+        const paths = await fetch(pathUrl).then(response => response.json())
+
+        for (const trip of paths) {
+          const snappedPath = trip.Path1
+          const coords = snappedPath
+            .split(',')
+            .map((point: string) => point.split(' ').map(p => parseFloat(p)))
+
+          const speeds = trip.Speed_path.split(',').map((speed: any) => parseFloat(speed))
+          const timestamps = trip.Timestamp_path.split(',').map((date: string) =>
+            date.substring(11, 19)
+          )
+
+          selectedPaths.push({ path: coords, speeds, startTime: trip.start_time, timestamps })
+        }
+
+        this.selectedPaths = [...selectedPaths]
+        await this.$nextTick()
+
+        i += chunk
+        numFilteredTrips += paths.length
+        this.numTrips = numFilteredTrips
+      }
+      this.runStatistics()
     },
 
     async clickedCoordinate(coord: number[]) {
@@ -676,7 +793,7 @@ const MyComponent = defineComponent({
 
       if (!startTrips.length) {
         this.selectedPaths = []
-        this.numTrips = 0
+        this.numTrips = -1
         return
       }
 
@@ -691,7 +808,7 @@ const MyComponent = defineComponent({
 
       if (!endTrips.length) {
         this.selectedPaths = []
-        this.numTrips = 0
+        this.numTrips = -1
         return
       }
 
@@ -705,52 +822,9 @@ const MyComponent = defineComponent({
         if (endT.includes(TT)) union.push(TT)
       }
 
-      // BUILD PATHS
-      const selectedPaths = [] as any[]
+      this.unfilteredTrips = union
 
-      // GET FULL PATHS FOR SELECTED (but unfiltered) TRIPS
-      const numUnfilteredTrips = union.length
-      console.log('UNFILTERED trips', numUnfilteredTrips)
-
-      if (numUnfilteredTrips == 0) {
-        // NO NEW TRIPS
-        this.numTrips = -1
-        return
-      }
-
-      // build filters
-
-      // only fetch 800 at a time due to URL length limits
-      const chunk = 807
-
-      let i = 0
-      let numFilteredTrips = 0
-
-      while (i < numUnfilteredTrips) {
-        console.log(i)
-        const tripIDs = union.slice(i, i + chunk).join(',')
-        const pathUrl = `${server}/path?trip=${tripIDs}`
-        console.log('path length:', pathUrl.length)
-        const paths = await fetch(pathUrl).then(response => response.json())
-
-        for (const trip of paths) {
-          const snappedPath = trip.Path1
-          const coords = snappedPath
-            .split(',')
-            .map((point: string) => point.split(' ').map(p => parseFloat(p)))
-
-          const speeds = trip.Speed_path.split(',').map((speed: any) => parseFloat(speed))
-
-          selectedPaths.push({ path: coords, speeds, startTime: trip.start_time })
-        }
-
-        this.selectedPaths = [...selectedPaths]
-        await this.$nextTick()
-
-        i += chunk
-        numFilteredTrips += paths.length
-        this.numTrips = numFilteredTrips
-      }
+      this.updateFilter()
     },
 
     handleNewFilter(columns: number[]) {
@@ -1341,7 +1415,7 @@ export default MyComponent
   // background-color: #373641;
   background: linear-gradient(35deg, #034a71, #2c5241);
   background: linear-gradient(35deg, #2c5241, #034a71);
-  padding: 0.5rem 1rem;
+  padding: 0rem 1rem;
   color: #eee;
   // border-left: 1px solid #557;
   display: flex;
@@ -1453,16 +1527,18 @@ input {
 }
 
 .statistics {
-  flex: 1;
+  margin-top: 1rem;
+  // flex: 1;
 }
 
 .reliability {
-  flex: 1;
+  margin-top: 2rem;
   margin-bottom: 1rem;
 }
 
 .myplot {
   margin-top: 0.5rem;
+  border: 1px solid #555;
 }
 
 h2 {
@@ -1471,7 +1547,7 @@ h2 {
 }
 
 .button-section {
-  margin-top: 1rem;
+  margin-top: 0.25rem;
 }
 
 .flex1 {

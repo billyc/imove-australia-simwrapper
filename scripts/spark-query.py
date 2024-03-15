@@ -81,6 +81,7 @@ def get_path():
     day_of_week = request.args.get('day_of_week')
     is_weekday = request.args.get('is_weekday')
     start_time = request.args.get('start_time')
+    veh_types = request.args.get('veh_type')
 
     trips = trip.split(',')
     # print(trips)
@@ -92,11 +93,13 @@ def get_path():
         filtered_df = filtered_df.filter(filtered_df.day_of_week==day_of_week)
     if is_weekday != None:
         filtered_df = filtered_df.filter(filtered_df.is_weekday==is_weekday)
+    if veh_types:
+        filtered_df = filtered_df.filter(filtered_df.veh_types == veh_types)
     if start_time:
         filtered_df = filtered_df.filter(filtered_df.start_time.startswith(start_time))
 
     # trimmed = filtered_df.select(['TripID', 'path', 'Timestamp_path'])
-    trimmed = filtered_df.select(['TripID', 'Path1','Speed_path','start_time'])
+    trimmed = filtered_df.select(['TripID', 'Path1','Timestamp_path','Speed_path','start_time'])
 
     json = trimmed.toPandas().to_json(orient='records')
     return json

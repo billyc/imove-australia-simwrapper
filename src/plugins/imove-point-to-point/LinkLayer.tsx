@@ -156,11 +156,12 @@ export default function Component({
     id: 'point-layer',
     data: points,
     radiusScale: 1.0,
-    radiusMinPixels: 15,
+    radiusMinPixels: 10,
     getPosition: (d: any) => d.coord,
     getFillColor: (d: any) => d.color,
-    getRadius: 1,
-    opacity: 0.5,
+    getRadius: 12,
+    opacity: 0.7,
+    radiusUnits: 'meters',
   })
 
   //@ts-ignore

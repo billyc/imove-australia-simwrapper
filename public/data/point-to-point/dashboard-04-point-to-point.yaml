@@ -6,7 +6,8 @@ header:
 layout:
   - type: 'imove-p2p'
     title: 'Point-to-Point Speed Reliability'
-    description: 'Click on origin and then destination to begin'
+    description: ''
+    #  Click on origin and then destination to begin'
     server: "http://127.0.0.1:5000"
     center: [145, -38]
     zoom: 11
