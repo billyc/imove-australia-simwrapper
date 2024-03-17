@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import DeckGL from '@deck.gl/react'
 import { COORDINATE_SYSTEM } from '@deck.gl/core'
-import { ScatterplotLayer } from '@deck.gl/layers'
+import { ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 
 import { OFFSET_DIRECTION } from '@/layers/LineOffsetLayer'
 import PathOffsetLayer from '@/layers/PathOffsetLayer'
@@ -156,7 +156,7 @@ export default function Component({
     id: 'point-layer',
     data: points,
     radiusScale: 1.0,
-    radiusMinPixels: 10,
+    radiusMinPixels: 12,
     getPosition: (d: any) => d.coord,
     getFillColor: (d: any) => d.color,
     getRadius: 12,
@@ -164,8 +164,23 @@ export default function Component({
     radiusUnits: 'meters',
   })
 
+  const labelLayer = new TextLayer({
+    id: 'label-layer',
+    data: [
+      { text: 'A', coordinates: startCoord },
+      { text: 'B', coordinates: endCoord },
+    ],
+    getText: (d: any) => d.text,
+    getPosition: (d: any) => d.coordinates,
+    getColor: [255, 255, 255],
+    getSize: 20,
+    billboard: false,
+    fontFamily: 'sans-serif',
+    fontWeight: 'bold',
+  })
+
   //@ts-ignore
-  const layer = new PathOffsetLayer({
+  const pathLayer = new PathOffsetLayer({
     id: 'pathLayer',
     data: paths,
     getPath: (d: any) => d.path,
@@ -204,7 +219,7 @@ export default function Component({
     /*
     //@ts-ignore */
     <DeckGL
-      layers={[layer, pointLayer]}
+      layers={[pathLayer, pointLayer, labelLayer]}
       viewState={viewState}
       controller={true}
       pickingRadius={5}

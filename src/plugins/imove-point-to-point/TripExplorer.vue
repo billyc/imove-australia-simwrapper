@@ -112,7 +112,7 @@ import {
 } from '@/Globals'
 // import FilterPanel from './BadFilterPanel.vue'
 import SelectorPanel from './SelectorPanel.vue'
-import LinkLayer from './LinkLayer'
+import LinkLayer from './DeckLayers'
 import HTTPFileSystem from '@/js/HTTPFileSystem'
 import DrawingTool from '@/components/DrawingTool/DrawingTool.vue'
 import VizConfigurator from '@/components/viz-configurator/VizConfigurator.vue'
@@ -1554,3 +1554,4 @@ h2 {
   margin-right: 1px;
 }
 </style>
+./DeckLayers
