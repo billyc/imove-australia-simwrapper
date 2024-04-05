@@ -6,7 +6,10 @@ RUN apk add --update --no-cache python3 py3-pip && ln -sf python3 /usr/bin/pytho
 RUN pip3 install --no-cache --upgrade pip setuptools
 
 # Flask/Gunicorn --------------------------------------------------
-RUN pip3 install --no-cache gunicorn flask flask-restful flask-reuploaded flask-cors
+RUN pip3 install --no-cache gunicorn flask flask-restful flask-cors
+
+# Apache Spark
+RUN pip3 install --no-cache pandas pyspark
 
 # nginx -----------------------------------------------------------
 RUN rm /etc/nginx/conf.d/default.conf

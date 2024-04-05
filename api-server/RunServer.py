@@ -1,38 +1,43 @@
 #!/usr/bin/env python3
 
 # RunServer.py #######################################################
-# This is the SimWrapper Runner API.
+# This is the iMOVE data API.
 #
 # It does one thing: it is a REST API application which can run in the
-# cloud somewhere and accepts job requests and file uploads from
-# SimWrapper users.
-#
-# Separately, the cluster-daemon program will occasionally poll this service
-# to see if any new jobs have been submitted, and that cluster daemon
-# will fetch the files and try to launch the job on the compute resource.
+# cloud somewhere and accepts data requests, queries the parquet files,
+# and returns the JSON result of the query.
 
-import os,sys,tempfile,random,shutil
+
+import os,setuptools,json
 from os.path import exists
+import sys,tempfile,random,shutil
+from datetime import datetime, timedelta
 
-import sqlite3
-from sqlite3 import Error
-from hashlib import sha1
-
-from flask import Flask, request, send_file
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_restful import Resource, Api, reqparse
-from flask_uploads import UploadSet, configure_uploads, ALL
+
+import pandas as pd
+from pyspark.conf import SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import to_json, udf
+from pyspark.sql.types import StringType
+
 
 # Storage volume expected to be mounted on /data:
-blobfolder = '/data/'
-database = '/data/database.sqlite3'
+folder = '/data/sample-data/computed'
+points_folder = '/data/sample-data/trip-points'
 
-# Set up API keys
+#folder = '/data/parquet-data/computed'
+#points_folder = '/data/parquet-data/trip-points'
+
+# Set up API keys ------------------------------
 authfile = 'auth-keys.csv'  # username,key
 valid_api_keys = {}
 
-
 def setup_auth_keys(authfile):
+    print('-- SETTING UP API AUTH KEYS')
+
     lookup = {}
     # keys from API_KEYS env variable
     if 'API_KEYS' in os.environ:
@@ -42,216 +47,24 @@ def setup_auth_keys(authfile):
             lookup[key] = len(split) > 1 and split[0] or 'user'
 
     # keys from auth_keys.csv
-    with open(authfile,'r') as keys:
-        for line in keys:
-            line = line.strip()
-            if line.startswith('#'): continue
-            items = line.split(',')
-            if len(items) >= 2: lookup[items[1]] = items[0]
+    try:
+        with open(authfile,'r') as keys:
+            for line in keys:
+                line = line.strip()
+                if line.startswith('#'): continue
+                items = line.split(',')
+                if len(items) >= 2: lookup[items[1]] = items[0]
+    except:
+       print("\n**\nAuth keyfile not found: ", authfile)
 
     # No keys? Abort
     if len(lookup.keys()) == 0:
-        raise Error("No valid API keys")
+        raise RuntimeError("\n***\nNo valid API keys. Provide keyfile or set API_KEYS env variable.")
         sys.exit(1)
 
-    print("\n*** SIMWRAPPER RUNSERVER")
+    print("\n*** IMOVE API SERVER")
     print("*** Valid API users:", ", ".join(lookup.values()), '\n')
     return lookup
-
-### SQL HELPERS ------------------------------------------------------------
-JOB_COLUMNS = ['id','owner','status','folder','project', 'start','script', 'qsub_id', 'cRAM', 'cProcessors', 'cEmail']
-FILE_COLUMNS = ['id', 'name', 'hash','file_type', 'size_of', 'modified_date', 'job_id']
-# JOB_STATUS = ['Not started', 'Submitted', 'Preparing', 'Queued', 'Launched', 'Complete', 'Cancelled', 'Error']
-
-
-def sql_create_connection(filename):
-    """ create a database connection to a database
-    """
-    conn = None;
-    try:
-        conn = sqlite3.connect(filename)
-        return conn
-    except Error as e:
-        print(e)
-    return conn
-
-
-def sql_create_table(conn, create_table_sql):
-    """ create a table from the create_table_sql statement
-    :param conn: Connection object
-    :param create_table_sql: a CREATE TABLE statement
-    :return:
-    """
-    try:
-        c = conn.cursor()
-        c.execute(create_table_sql)
-    except Error as e:
-        print(e)
-
-
-def sql_create_clean_database(database):
-
-    sql_create_jobs_table = """CREATE TABLE IF NOT EXISTS jobs (
-                                        id INTEGER PRIMARY KEY,
-                                        owner TEXT,
-                                        status INTEGER,
-                                        folder TEXT,
-                                        project TEXT,
-                                        start TEXT,
-                                        script TEXT,
-                                        qsub_id TEXT,
-                                        cRAM TEXT,
-                                        cProcessors TEXT,
-                                        cEmail TEXT
-                            ); """
-
-    sql_create_files_table = """CREATE TABLE IF NOT EXISTS files (
-                                    id INTEGER PRIMARY KEY,
-                                    name TEXT NOT NULL,
-                                    hash TEXT NOT NULL,
-                                    file_type TEXT,
-                                    size_of INTEGER,
-                                    modified_date TEXT,
-                                    job_id INTEGER NOT NULL,
-                                    FOREIGN KEY (job_id) REFERENCES jobs(id)
-                                );"""
-
-    conn = sql_create_connection(database)
-
-    if conn is not None:
-        sql_create_table(conn, sql_create_jobs_table)
-        sql_create_table(conn, sql_create_files_table)
-    else:
-        print('cannot create database connection')
-
-
-def sql_select_jobs(queryTerms):
-    conn = sql_create_connection(database)
-    with conn:
-        if 'running' in queryTerms.keys():
-          sql = "SELECT * FROM jobs WHERE status=3 OR status=4"
-        else:
-          terms = [f"{x}=:{x}" for x in queryTerms.keys()]
-          joined = "AND ".join(terms)
-          # No injection please
-          if (joined.find(';') > -1): return []
-          sql = "SELECT * FROM jobs "
-          if len(terms) > 0: sql += "WHERE " + joined
-
-        cur = conn.cursor()
-        cur.execute(sql, queryTerms)
-        rows = cur.fetchall()
-
-        answerDict = []
-        for row in rows:
-            json = dict(map(lambda i,j : (i,j), JOB_COLUMNS, row))
-            # print(json)
-            answerDict.append(json)
-        return answerDict
-    return []
-
-
-def sql_insert_job(queryDict):
-    conn = sql_create_connection(database)
-    with conn:
-        # generate keys/values from dict
-        columns = ', '.join(queryDict.keys())
-        placeholders = ':'+', :'.join(queryDict.keys())
-        sql = 'INSERT INTO jobs(%s) VALUES(%s)' % (columns, placeholders)
-
-        cur = conn.cursor()
-        cur.execute(sql, queryDict)
-        conn.commit()
-
-        # print(cur.lastrowid)
-        return cur.lastrowid
-
-
-def sql_update_job(job_id, queryDict):
-    conn = sql_create_connection(database)
-    with conn:
-        # generate keys/values from dict
-        vars = [f"{x}=:{x}" for x in queryDict.keys()]
-        joined = ", ".join(vars)
-        sql = 'UPDATE jobs SET ' + joined + ' WHERE id = ' + job_id
-
-        # print(sql)
-
-        cur = conn.cursor()
-        cur.execute(sql, queryDict)
-        conn.commit()
-
-        # print(cur.lastrowid)
-        return cur.lastrowid
-    return "nope", 500
-
-
-def sql_insert_file(queryDict):
-    conn = sql_create_connection(database)
-    with conn:
-        # generate keys/values from dict
-        columns = ', '.join(queryDict.keys())
-        placeholders = ':'+', :'.join(queryDict.keys())
-
-        sql = 'INSERT INTO files (%s) VALUES (%s)' % (columns, placeholders)
-        cur = conn.cursor()
-        cur.execute(sql, queryDict)
-        conn.commit()
-        # print(cur.lastrowid)
-        return cur.lastrowid
-
-    return "Could not add file", 500
-
-
-def sql_select_files(queryTerms):
-    conn = sql_create_connection(database)
-    with conn:
-        terms = [f"{x}=:{x}" for x in queryTerms.keys()]
-        joined = "AND ".join(terms)
-        # No injection please
-        if (joined.find(';') > -1): return []
-        sql = "SELECT * FROM files "
-        if len(terms) > 0: sql += "WHERE " + joined
-        cur = conn.cursor()
-        cur.execute(sql, queryTerms)
-        rows = cur.fetchall()
-
-        answerDict = []
-        for row in rows:
-            json = dict(map(lambda i,j : (i,j), FILE_COLUMNS, row))
-            # print(json)
-            answerDict.append(json)
-        return answerDict
-    return []
-
-
-def sql_select_files_by_hash(hash):
-    conn = sql_create_connection(database)
-    with conn:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM files")
-        rows = cur.fetchall()
-        answerDict = []
-        for row in rows:
-            json = dict(map(lambda i,j : (i,j), FILE_COLUMNS, row))
-            # print(json)
-            answerDict.append(json)
-        return answerDict
-
-### END SQL HELPERS ------------------------------------------------------------
-
-def getHash(filename):
-    BUF_SIZE = 65536
-    sha = sha1()
-    with open(filename, 'rb') as f:
-        while True:
-            data = f.read(BUF_SIZE)
-            if not data:
-                break
-            sha.update(data)
-        sha.update(data)
-    return sha.hexdigest()
-
 
 def is_valid_api_key():
     apikey = request.headers.get('Authorization')
@@ -259,173 +72,162 @@ def is_valid_api_key():
     return False
 
 
-class FilesList(Resource):
-    def get(self):
-        if not is_valid_api_key(): return "Invalid API Key", 403
-        return sql_select_files(request.args)
-
-    def post(self):
-        if not is_valid_api_key(): return "Invalid API Key", 403
-
-        print("### FILES", request.files)
-        print("### FORM", request.form)
-
-        if not "file" in request.files:
-            try:
-                files_parser = reqparse.RequestParser()
-                for column in FILE_COLUMNS:
-                    files_parser.add_argument(column)
-                params = files_parser.parse_args()
-
-                result = sql_insert_file(params)
-                return result, 201 # created
-            except Error as e:
-                print(e)
-
-        if "file" in request.files:
-            myFile = request.files["file"]
-            if myFile:
-                try:
-                    user_filename = '' + myFile.filename
-                    tmpFile = "temp{}".format(random.randint(0,1e12))
-                    myFile.filename = tmpFile
-                    filename = files.save(myFile)
-                    tmpFullPath = os.path.join(blobfolder, tmpFile)
-                    fileSize = os.path.getsize(tmpFullPath)
-                    hashx = getHash(tmpFullPath)
-                    os.rename(tmpFullPath, os.path.join(blobfolder,hashx))
-                    insertedRow = sql_insert_file({
-                        "name": user_filename,
-                        "hash": hashx,
-                        "size_of": fileSize,
-                        "job_id": request.form.get("job_id")
-                    })
-                    return insertedRow, 201
-                except Error as e:
-                    print(e)
-
-
-        return "Failed, file not uploaded", 500
-
-
-class JobsList(Resource):
-    def get(self):
-        if not is_valid_api_key(): return "Invalid API Key", 403
-
-        conn = sql_create_connection(database)
-        with conn:
-            active_jobs = sql_select_jobs(request.args) # active
-            return active_jobs
-
-
-    def post(self):
-        """ Create new empty unstarted job"""
-        if not is_valid_api_key(): return "Invalid API Key", 403
-
-        job_parser = reqparse.RequestParser()
-        for column in JOB_COLUMNS:
-            job_parser.add_argument(column)
-        job = job_parser.parse_args()
-        job["status"] = 0
-
-        # map the username
-        apikey = request.headers.get('Authorization')
-        username = valid_api_keys[apikey]
-        if username: job["owner"] = username
-
-        print(12345, job)
-        result = sql_insert_job(job)
-        return result, 201 # created
-
-
-class Job(Resource):
-    # def get(self, job_id):
-    #     if not is_valid_api_key(): return "Invalid API Key", 403
-    #     if student_id not in STUDENTS:
-    #         return "Not found", 404
-    #     else:
-    #         return STUDENTS[student_id]
-
-    def put(self, job_id):
-        """ Update job - change status etc
-        """
-        if not is_valid_api_key(): return "Invalid API Key", 403
-        if not job_id.isnumeric(): return "Invalid ID", 403
-
-        job_parser = reqparse.RequestParser()
-        for column in JOB_COLUMNS:
-            job_parser.add_argument(column)
-        args = job_parser.parse_args()
-
-        # fetch existing copy
-        job = sql_select_jobs({"id": job_id})
-        if len(job) != 1: return "Invalid ID", 404
-        job = job[0]
-
-        for column in JOB_COLUMNS:
-            args[column] = args[column] if args[column] is not None else job[column]
-
-        result = sql_update_job(job_id, args)
-        return result, 200
-
-
-class File(Resource):
-    def get(self, file_id):
-        if not is_valid_api_key(): return "Invalid API Key", 403
-
-        query = {"id": file_id}
-        file_records = sql_select_files(query)
-        if len(file_records) != 1: return "File not found", 404
-
-        requested_file = file_records[0]
-        hash = requested_file["hash"]
-        # print(hash)
-
-        return send_file(blobfolder + hash, download_name=requested_file["name"])
-
-    # TODO will we need rename?
-    # def put(self, job_id):
-    #     """ Update job - change status etc
-    #     """
-    #     if not is_valid_api_key(): return "Invalid API Key", 403
-    #     if not job_id.isnumeric(): return "Invaoid ID", 403
-
-    #     parser.add_argument("status")
-    #     args = parser.parse_args()
-
-    #     if args["status"] is not None:
-    #         result = sql_update_job(job_id, args)
-    #         return result, 200
-
-    #     return "no status in request", 500
-
-
-# ---------- Set up Flask ---------
-
-if not exists(database): sql_create_clean_database(database)
-
 valid_api_keys = setup_auth_keys(authfile)
+
+# ------ SET UP SPARK
+spark = (
+   SparkSession.builder.appName("CompassIoT")
+   .config("spark.sql.repl.eagerEval.enabled", True)
+   .config("spark.sql.parquet.cacheMetadata", "true")
+   .config("spark.executor.memory", "8g")
+   .config("spark.driver.memory", "8g")
+   .config("spark.sql.session.timeZone", "Etc/UTC")
+   .getOrCreate()
+)
+
+
+# initialize spark dataframe
+df = spark.read.parquet(folder)
+df.printSchema()
+
+points = spark.read.parquet(points_folder)
+
+
+# ---------- Set up Flask ----------------------------
+# Flask API
 
 app = Flask(__name__)
 CORS(app)
-# app.config['CORS_HEADERS'] = 'Content-Type'
+
+valid_api_keys = setup_auth_keys(authfile)
+
+@app.route('/location', methods=['GET'])
+def filter_by_location():
+    if not is_valid_api_key(): return "Invalid API Key", 403
+
+    lon = float(request.args.get('lon'))
+    lat = float(request.args.get('lat'))
+
+    radius = request.args.get('radius')
+    radius = radius and float(radius) or 0.001  # default radius
+
+    if not lon: return []
+    if not lat: return []
+
+    lon_lo = lon - radius
+    lon_hi = lon + radius
+    lat_lo = lat - radius
+    lat_hi = lat + radius
+
+    filtered_points = points
+    filtered_points = filtered_points.filter(filtered_points.lon.between(lon_lo, lon_hi))
+    filtered_points = filtered_points.filter(filtered_points.lat.between(lat_lo, lat_hi))
+
+    # only return one row per TripID
+    filtered_points = filtered_points.select('TripID').distinct()
+
+    # output
+    json = filtered_points.toPandas().to_json(orient='records')
+    return json
+
+
+@app.route('/path', methods=['GET'])
+def get_path():
+    if not is_valid_api_key(): return "Invalid API Key", 403
+
+    # Get query parameters
+    trip = request.args.get('trip')
+    if not trip: raise RuntimeError('need trip')
+
+    day_of_week = request.args.get('day_of_week')
+    is_weekday = request.args.get('is_weekday')
+    start_time = request.args.get('start_time')
+    veh_types = request.args.get('veh_type')
+
+    trips = trip.split(',')
+    # print(trips)
+
+    # fetch selected trips
+    filtered_df = df.filter(df.TripID.isin(trips))
+
+    if day_of_week != None:
+        filtered_df = filtered_df.filter(filtered_df.day_of_week==day_of_week)
+    if is_weekday != None:
+        filtered_df = filtered_df.filter(filtered_df.is_weekday==is_weekday)
+    if veh_types:
+        filtered_df = filtered_df.filter(filtered_df.veh_types == veh_types)
+    if start_time:
+        filtered_df = filtered_df.filter(filtered_df.start_time.startswith(start_time))
+
+    # trimmed = filtered_df.select(['TripID', 'path', 'Timestamp_path'])
+    trimmed = filtered_df.select(['TripID', 'Path1','Timestamp_path','Speed_path','start_time'])
+
+    json = trimmed.toPandas().to_json(orient='records')
+    return json
+
+
+@app.route('/filter', methods=['GET'])
+def filter_dataframe():
+    if not is_valid_api_key(): return "Invalid API Key", 403
+
+    # Get query parameters
+    vehicle = request.args.get('vehicle')
+    veh_type = request.args.get('veh_type')
+    trip = request.args.get('trip')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_time')
+    start_lon = request.args.get('start_lon')
+    start_lat = request.args.get('start_lat')
+    end_lon = request.args.get('end_lon')
+    end_lat = request.args.get('end_lat')
+    distance = request.args.get('distance')
+    duration = request.args.get('total_time')
+
+    day_of_week = request.args.get('day_of_week')
+    is_weekday = request.args.get('is_weekday')
+    start_time = request.args.get('start_time')
+
+    filtered_df = df
+
+    # Apply filters
+    if start_date:
+        filtered_df = filtered_df.filter(filtered_df.start_date==start_date)
+    if end_date:
+        filtered_df = filtered_df.filter(filtered_df.end_date==end_date)
+    if start_lon:
+        filtered_df = filtered_df.filter(filtered_df.start_lon.startswith(start_lon))
+    if start_lat:
+        filtered_df = filtered_df.filter(filtered_df.start_lat.startswith(start_lat))
+    if end_lon:
+        filtered_df = filtered_df.filter(filtered_df.start_lon.startswith(end_lon))
+    if end_lat:
+        filtered_df = filtered_df.filter(filtered_df.start_lat.startswith(end_lat))
+    if vehicle:
+        filtered_df = filtered_df.filter(filtered_df.VehicleID==vehicle)
+    if veh_type:
+        filtered_df = filtered_df.filter(filtered_df.veh_types==veh_type)
+    if trip:
+        filtered_df = filtered_df.filter(filtered_df.TripID==trip)
+
+    if day_of_week != None:
+        filtered_df = filtered_df.filter(filtered_df.day_of_week==day_of_week)
+    if is_weekday != None:
+        filtered_df = filtered_df.filter(filtered_df.is_weekday==is_weekday)
+    if start_time:
+        filtered_df = filtered_df.filter(filtered_df.start_time.startswith(start_time))
+
+    trimmed = filtered_df.select(['VehicleID','TripID','start_date','start_time','end_date','end_time','start_lon','start_lat','end_lon','end_lat','total_time','TravelDistanceMeters'])
+
+    json = trimmed.toPandas().to_json(orient='records')
+
+    return json
 
 api = Api(app)
 
-# Set up Flask Uploads ----------------------------------------------
-app.config['MAX_CONTENT_LENGTH'] = 125 * 1024 * 1024 # 125 max file size
-app.config["UPLOADED_FILES_DEST"] = blobfolder
-files = UploadSet("files", ALL)
-configure_uploads(app, files)
-
-api.add_resource(FilesList, '/files/')
-api.add_resource(File, '/files/<file_id>')
-api.add_resource(JobsList, '/jobs/')
-api.add_resource(Job, '/jobs/<job_id>')
-
-def main():
-    sql_create_clean_database(database)
-    app.run(port=4999, debug=True)
+# api.add_resource(FilesList, '/files/')
+# api.add_resource(File, '/files/<file_id>')
+# api.add_resource(JobsList, '/jobs/')
+# api.add_resource(Job, '/jobs/<job_id>')
 
 if __name__ == "__main__":
-    main()
+    app.run(port=4999, debug=False)

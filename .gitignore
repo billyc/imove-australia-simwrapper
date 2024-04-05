@@ -6,6 +6,8 @@ node_modules
 /web-app/dist
 /web-app/public/data/index.html
 
+venv
+
 # local env files
 .env.local
 .env.*.local
