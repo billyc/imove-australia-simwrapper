@@ -58,20 +58,10 @@
   .plot-container(:id="`container-${linkLayerId}`")
     link-layer.map-area(
         :viewId="linkLayerId"
-        :links="geojsonData"
-        :colorRampType="colorRampType"
-        :build="csvData"
-        :base="csvBase"
-        :widths="csvWidth"
-        :widthsBase="csvWidthBase"
+        :paths="selectedPaths"
         :dark="isDarkMode"
-        :newColors="colorArray"
-        :newWidths="widthArray"
-        :scaleWidth="scaleWidth"
-        :projection="vizDetails.projection"
         :mapIsIndependent="vizDetails.mapIsIndependent"
         :click="handleClick"
-        :paths="selectedPaths"
         :startCoord="startCoord"
         :endCoord="endCoord"
     )
@@ -90,27 +80,15 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
+
 import { ToggleButton } from 'vue-js-toggle-button'
-import { rgb } from 'd3-color'
-import { scaleThreshold, scaleOrdinal } from 'd3-scale'
-import { shallowEqualObjects } from 'shallow-equal'
 import { length } from '@turf/turf'
 import { mean, std } from 'mathjs'
 import moment from 'moment'
-import readBlob from 'read-blob'
 import YAML from 'yaml'
 
 import globalStore from '@/store'
-import {
-  MAP_STYLES_OFFLINE,
-  DataTableColumn,
-  DataTable,
-  DataType,
-  LookupDataset,
-  UI_FONT,
-  BG_COLOR_DASHBOARD,
-} from '@/Globals'
-// import FilterPanel from './BadFilterPanel.vue'
+import { DataTable, LookupDataset, UI_FONT, BG_COLOR_DASHBOARD } from '@/Globals'
 import SelectorPanel from './SelectorPanel.vue'
 import LinkLayer from './DeckLayers'
 import HTTPFileSystem from '@/js/HTTPFileSystem'
@@ -119,24 +97,8 @@ import VizConfigurator from '@/components/viz-configurator/VizConfigurator.vue'
 import VuePlotly from '@/components/VuePlotly.vue'
 import ZoomButtons, { Corner } from '@/components/ZoomButtons.vue'
 import LegendStore from '@/js/LegendStore'
-import Coords from '@/js/Coords'
-import { arrayBufferToBase64 } from '@/js/util'
 
-import {
-  ColorScheme,
-  FileSystem,
-  FileSystemConfig,
-  VisualizationPlugin,
-  Status,
-  REACT_VIEW_HANDLES,
-} from '@/Globals'
-
-import { LineColorDefinition } from '@/components/viz-configurator/LineColors.vue'
-import { LineWidthDefinition } from '@/components/viz-configurator/LineWidths.vue'
-import { DatasetDefinition } from '@/components/viz-configurator/AddDatasets.vue'
-import DashboardDataManager from '@/js/DashboardDataManager'
-
-const LOOKUP_COLUMN = '_LINK_OFFSET_'
+import { ColorScheme, FileSystemConfig, REACT_VIEW_HANDLES } from '@/Globals'
 
 const MyComponent = defineComponent({
   name: 'NetworkLinksPlugin',
@@ -155,7 +117,6 @@ const MyComponent = defineComponent({
     yamlConfig: String,
     config: Object as any,
     thumbnail: Boolean,
-    datamanager: { type: Object as PropType<DashboardDataManager> },
   },
   data() {
     return {
@@ -258,39 +219,21 @@ const MyComponent = defineComponent({
       vizDetails: {
         title: '',
         description: '',
-        csvFile: '',
-        csvBase: '',
-        datasets: {} as { [id: string]: string },
-        useSlider: false,
-        showDifferences: false,
         server: '',
-        shpFile: '',
-        dbfFile: '',
         network: '',
-        geojsonFile: '',
         projection: '',
         center: null as any,
         zoom: 0,
-        widthFactor: null as any,
         thumbnail: '',
         sum: false,
-        nodes: '', // SFCTA nodes shapefile
-        links: [] as string[], // SFCTA links DBF files
         mapIsIndependent: false,
-        display: {
-          color: {} as any,
-          width: {} as any,
-        },
       },
 
       currentUIFilterDefinitions: {} as any,
       datasets: {} as { [id: string]: DataTable },
       isButtonActiveColumn: false,
       linkLayerId: `linklayer-${Math.floor(1e12 * Math.random())}` as any,
-      scaleWidth: 0,
       numLinks: 0,
-      showTimeRange: false,
-      legendStore: new LegendStore(),
       geojsonData: {
         source: new Float32Array(),
         dest: new Float32Array(),
@@ -305,51 +248,12 @@ const MyComponent = defineComponent({
         thumbnail: false,
       },
 
-      csvData: {
-        datasetKey: '',
-        activeColumn: '',
-        dataTable: {},
-        csvRowFromLinkRow: [],
-      } as LookupDataset,
-
-      csvBase: {
-        datasetKey: '',
-        activeColumn: '',
-        dataTable: {},
-        csvRowFromLinkRow: [],
-      } as LookupDataset,
-
-      csvWidth: {
-        datasetKey: '',
-        activeColumn: '',
-        dataTable: {},
-        csvRowFromLinkRow: [],
-      } as LookupDataset,
-
-      csvWidthBase: {
-        datasetKey: '',
-        activeColumn: '',
-        dataTable: {},
-        csvRowFromLinkRow: [],
-      } as LookupDataset,
-
-      // private linkOffsetLookup: { [id: string]: number } = {}
       isDarkMode: this.$store.state.colorScheme === ColorScheme.DarkMode,
       isDataLoaded: false,
       thumbnailUrl: "url('assets/thumbnail.jpg') no-repeat;",
 
-      currentWidthDefinition: { columnName: '' } as LineWidthDefinition,
-
-      // DataManager might be passed in from the dashboard; or we might be
-      // in single-view mode, in which case we need to create one for ourselves
-      myDataManager: this.datamanager || new DashboardDataManager(this.root, this.subfolder),
-
       resizer: undefined as ResizeObserver | undefined,
-      dataLoaderWorkers: [] as Worker[],
       csvRowLookupFromLinkRow: {} as { [datasetId: string]: number[] },
-
-      colorArray: new Uint8Array(),
-      widthArray: new Float32Array(),
     }
   },
   computed: {
@@ -370,16 +274,6 @@ const MyComponent = defineComponent({
 
     urlThumbnail(): string {
       return this.thumbnailUrl
-    },
-
-    colorRampType(): any {
-      const rampType = this.vizDetails.display.color?.colorRamp?.style
-      if (rampType === undefined) return -1
-      return rampType
-    },
-
-    buttonTitle(): string {
-      return this.csvData.activeColumn || 'Loading...'
     },
   },
   watch: {
@@ -768,10 +662,6 @@ const MyComponent = defineComponent({
   beforeDestroy() {
     // MUST delete the React view handle to prevent gigantic memory leak!
     delete REACT_VIEW_HANDLES[this.linkLayerId]
-
-    try {
-      for (const worker of this.dataLoaderWorkers) worker.terminate()
-    } catch (e) {}
 
     this.$store.commit('setFullScreen', false)
   },
