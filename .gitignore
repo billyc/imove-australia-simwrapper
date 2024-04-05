@@ -1,7 +1,7 @@
 .DS_Store
 node_modules
-/dist
-/public/data/index.html
+/web-app/dist
+/web-app/public/data/index.html
 
 # local env files
 .env.local
@@ -22,3 +22,4 @@ yarn-error.log*
 *.sw?
 *.bak
 ~$*
+
