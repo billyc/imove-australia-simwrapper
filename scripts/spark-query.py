@@ -2,9 +2,8 @@
 # ------------------------------------
 # source venv/bin/activate
 
-import setuptools
+import os, setuptools, json
 import pandas as pd
-import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pyspark.conf import SparkConf
@@ -12,6 +11,50 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import to_json, udf
 from pyspark.sql.types import StringType
 from datetime import datetime, timedelta
+
+authfile = 'auth-keys.csv'  # username,key
+
+# ---------------------
+# Set up API keys
+
+def setup_auth_keys(authfile):
+    print('-- SETTING UP API AUTH KEYS')
+
+    lookup = {}
+    # keys from API_KEYS env variable
+    if 'API_KEYS' in os.environ:
+        env_api_keys = [key.strip() for key in os.environ['API_KEYS'].split(',')]
+        for key in env_api_keys:
+            split = key.split('-')
+            lookup[key] = len(split) > 1 and split[0] or 'user'
+
+    # keys from auth_keys.csv
+    try:
+        with open(authfile,'r') as keys:
+            for line in keys:
+                line = line.strip()
+                if line.startswith('#'): continue
+                items = line.split(',')
+                if len(items) >= 2: lookup[items[1]] = items[0]
+    except:
+       print("\n**\nAuth keyfile not found: ", authfile)
+
+    # No keys? Abort
+    if len(lookup.keys()) == 0:
+        raise RuntimeError("\n***\nNo valid API keys. Provide keyfile or set API_KEYS env variable.")
+        sys.exit(1)
+
+    print("\n*** IMOVE API SERVER")
+    print("*** Valid API users:", ", ".join(lookup.values()), '\n')
+    return lookup
+
+def is_valid_api_key():
+    apikey = request.headers.get('Authorization')
+    if apikey in valid_api_keys: return True
+    return False
+
+
+valid_api_keys = setup_auth_keys(authfile)
 
 # ------------------
 # Set up Spark
@@ -38,14 +81,18 @@ df.printSchema()
 
 points = spark.read.parquet(points_folder)
 
+
 # ------------------
 # Flask API
 
 app = Flask(__name__)
 CORS(app)
 
+
 @app.route('/location', methods=['GET'])
 def filter_by_location():
+    if not is_valid_api_key(): return "Invalid API Key", 403
+
     lon = float(request.args.get('lon'))
     lat = float(request.args.get('lat'))
 
@@ -74,6 +121,8 @@ def filter_by_location():
 
 @app.route('/path', methods=['GET'])
 def get_path():
+    if not is_valid_api_key(): return "Invalid API Key", 403
+
     # Get query parameters
     trip = request.args.get('trip')
     if not trip: raise RuntimeError('need trip')
@@ -107,6 +156,8 @@ def get_path():
 
 @app.route('/filter', methods=['GET'])
 def filter_dataframe():
+    if not is_valid_api_key(): return "Invalid API Key", 403
+
     # Get query parameters
     vehicle = request.args.get('vehicle')
     veh_type = request.args.get('veh_type')
@@ -166,6 +217,9 @@ def filter_dataframe():
 
     json = trimmed.toPandas().to_json(orient='records')
     return json
+
+
+# valid_api_keys = setup_auth_keys(authfile)
 
 # Start Flask API Server
 if __name__ == '__main__':
