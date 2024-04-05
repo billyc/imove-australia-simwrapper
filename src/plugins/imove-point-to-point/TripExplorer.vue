@@ -742,7 +742,14 @@ const MyComponent = defineComponent({
         const tripIDs = this.unfilteredTrips.slice(i, i + chunk).join(',')
         const pathUrl = `${this.vizDetails.server}/path?trip=${tripIDs}${filters}`
         console.log('path length:', pathUrl.length)
-        const paths = await fetch(pathUrl).then(response => response.json())
+        let paths = [] as any[]
+        try {
+          this.myState.statusMessage = ''
+          paths = await fetch(pathUrl).then(response => response.json())
+        } catch (e) {
+          this.myState.statusMessage = 'Error fetching paths :-('
+          return
+        }
 
         for (const trip of paths) {
           const snappedPath = trip.Path1
@@ -782,34 +789,43 @@ const MyComponent = defineComponent({
 
       const server = this.vizDetails.server
 
-      // GET START TRIP LIST
-      const [lon, lat] = this.startCoord
-      console.log({ lon, lat })
-      let url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
-      console.log(url)
-      const startTrips = await (
-        await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } })
-      ).json()
+      // JSON response will go here:
+      let startTrips = [] as any[]
+      let endTrips = [] as any[]
 
-      if (!startTrips.length) {
-        this.selectedPaths = []
-        this.numTrips = -1
-        return
-      }
+      try {
+        this.myState.statusMessage = ''
+        // GET START TRIP LIST
+        const [lon, lat] = this.startCoord
+        console.log({ lon, lat })
+        let url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
+        console.log(url)
+        startTrips = await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } }).then(
+          response => response.json()
+        )
 
-      // GET END TRIP LIST
-      const [lon2, lat2] = this.endCoord
-      console.log({ lon2, lat2 })
-      url = `${server}/location?lon=${lon2}&lat=${lat2}&radius=0.0002`
-      console.log(url)
-      const endTrips = await (
-        await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } })
-      ).json()
+        if (!startTrips.length) {
+          this.selectedPaths = []
+          this.numTrips = -1
+          return
+        }
 
-      if (!endTrips.length) {
-        this.selectedPaths = []
-        this.numTrips = -1
-        return
+        // GET END TRIP LIST
+        const [lon2, lat2] = this.endCoord
+        console.log({ lon2, lat2 })
+        url = `${server}/location?lon=${lon2}&lat=${lat2}&radius=0.0002`
+        console.log(url)
+        endTrips = await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } }).then(
+          response => response.json()
+        )
+
+        if (!endTrips.length) {
+          this.selectedPaths = []
+          this.numTrips = -1
+          return
+        }
+      } catch (e) {
+        this.myState.statusMessage = 'Error fetching paths :-('
       }
 
       // FIGURE OUT UNION
