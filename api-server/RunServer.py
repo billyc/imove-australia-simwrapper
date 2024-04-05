@@ -81,6 +81,8 @@ spark = (
    .config("spark.sql.parquet.cacheMetadata", "true")
    .config("spark.executor.memory", "8g")
    .config("spark.driver.memory", "8g")
+   .config("org.xerial.snappy.use.systemlib", True)
+   .config("org.xerial.snappy.lib.path","/usr/lib/libsnappyjava.so")
    .config("spark.sql.session.timeZone", "Etc/UTC")
    .getOrCreate()
 )
