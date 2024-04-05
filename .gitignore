@@ -1,4 +1,7 @@
 .DS_Store
+
+auth-keys.csv
+
 node_modules
 /web-app/dist
 /web-app/public/data/index.html
