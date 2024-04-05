@@ -19,7 +19,7 @@ import globalStore from '@/store'
 
 export default function Component({
   viewId = 0,
-  dark = false,
+  dark = true,
   mapIsIndependent = false,
   click = {} as any,
   paths = [] as any,

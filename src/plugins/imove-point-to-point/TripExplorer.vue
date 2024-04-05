@@ -68,10 +68,8 @@
 
     zoom-buttons.zoom-buttons(v-if="!thumbnail" corner="top-left")
 
-    .top-panel(v-show="numTrips <= 0")
+    .info-panel(v-show="numTrips <= 0")
       p {{ numTrips == -1 ? 'No trips pass between those points. Zoom in, try again' : prompt[numIntersectionsSelected] }}
-
-    .bottom-panel
       .status-message(v-if="myState.statusMessage")
         p {{ myState.statusMessage }}
 
@@ -120,6 +118,7 @@ const MyComponent = defineComponent({
   },
   data() {
     return {
+      apiKey: '',
       prompt: ['Select an intersection on the map', 'Select second intersection', '...'],
       selectedPaths: [] as any[],
       numTrips: 0,
@@ -525,9 +524,12 @@ const MyComponent = defineComponent({
         const pathUrl = `${this.vizDetails.server}/path?trip=${tripIDs}${filters}`
         console.log('path length:', pathUrl.length)
         let paths = [] as any[]
+
         try {
           this.myState.statusMessage = ''
-          paths = await fetch(pathUrl).then(response => response.json())
+          paths = await fetch(pathUrl, {
+            headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
+          }).then(response => response.json())
         } catch (e) {
           this.myState.statusMessage = 'Error fetching paths :-('
           return
@@ -557,6 +559,22 @@ const MyComponent = defineComponent({
       this.runStatistics()
     },
 
+    async fetchTripsAtLocation(url: string) {
+      const trips = (await fetch(url, {
+        headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
+      }).then(async response => {
+        if (response.status == 200) return response.json()
+        if (response.status == 403) {
+          // try again
+          this.forceApiAuthorization()
+          return await this.fetchTripsAtLocation(url)
+        }
+        throw Error('API ERROR: ' + response.statusText)
+      })) as any[]
+
+      return trips
+    },
+
     async clickedCoordinate(coord: number[]) {
       if (this.numIntersectionsSelected == 0) this.startCoord = coord
       if (this.numIntersectionsSelected == 1) this.endCoord = coord
@@ -582,13 +600,8 @@ const MyComponent = defineComponent({
         console.log({ lon, lat })
         let url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
         console.log(url)
-        startTrips = await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } }).then(
-          response => {
-            if (response.status == 200) return response.json()
-            throw Error('API ERROR: ' + response.statusText)
-          }
-        )
 
+        startTrips = await this.fetchTripsAtLocation(url)
         if (!startTrips.length) {
           this.selectedPaths = []
           this.numTrips = -1
@@ -600,10 +613,8 @@ const MyComponent = defineComponent({
         console.log({ lon2, lat2 })
         url = `${server}/location?lon=${lon2}&lat=${lat2}&radius=0.0002`
         console.log(url)
-        endTrips = await fetch(url, { headers: { 'Access-Control-Allow-Origin': '*' } }).then(
-          response => response.json()
-        )
 
+        endTrips = await this.fetchTripsAtLocation(url)
         if (!endTrips.length) {
           this.selectedPaths = []
           this.numTrips = -1
@@ -644,6 +655,21 @@ const MyComponent = defineComponent({
         logo.style.right = right
       }
     },
+
+    getApiAuthorization() {
+      let auth = localStorage.getItem('imove-api-key')
+      if (!auth) auth = prompt('API access key required:')
+
+      if (auth) {
+        this.apiKey = auth
+        localStorage.setItem('imove-api-key', auth)
+      }
+    },
+
+    forceApiAuthorization() {
+      localStorage.removeItem('imove-api-key')
+      this.getApiAuthorization()
+    },
   },
 
   async mounted() {
@@ -657,6 +683,8 @@ const MyComponent = defineComponent({
 
     this.setupLogoMover()
     console.log('ok')
+
+    this.getApiAuthorization()
   },
 
   beforeDestroy() {
@@ -709,7 +737,7 @@ export default MyComponent
   flex-direction: column;
 }
 
-.top-panel {
+.info-panel {
   position: absolute;
   bottom: 4rem;
   left: 5rem;
@@ -723,17 +751,6 @@ export default MyComponent
   font-size: 18px;
   border: 1px solid #bbb;
   text-align: center;
-}
-
-.bottom-panel {
-  grid-column: 1 / 3;
-  grid-row: 2 / 3;
-  display: flex;
-  flex-direction: column;
-  font-size: 0.8rem;
-  pointer-events: auto;
-  margin: auto 0.5rem 2px 7px;
-  filter: drop-shadow(0px 2px 4px #22222233);
 }
 
 .status-message {
@@ -839,6 +856,16 @@ h2 {
 
 .flex1 {
   margin-right: 1px;
+}
+
+.auth-panel {
+  position: absolute;
+  top: 2rem;
+  left: 0;
+  right: 0;
+  width: 20rem;
+  margin: 0 auto;
+  z-index: 10;
 }
 </style>
 ./DeckLayers
