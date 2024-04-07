@@ -1,0 +1,6 @@
+title: 'iMove Australia Demo'
+description: 'Sample data from parquet'
+drtTrips: trips.json
+center: [145, -38]
+zoom: 9
+

@@ -1,0 +1,14 @@
+header:
+  tab: 'Reliability'
+  title: ''
+  fullScreen: true
+
+layout:
+  - type: 'imove-p2p'
+    title: 'Point-to-Point Speed Reliability'
+    description: ''
+    #  Click on origin and then destination to begin'
+    # server: "http://127.0.0.1:4999"
+    server: 'https://imove-api-server.fly.dev'
+    center: [145, -38]
+    zoom: 11

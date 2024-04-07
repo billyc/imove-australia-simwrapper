@@ -1,0 +1,12 @@
+header:
+  tab: 'Reliability'
+  title: ''
+  fullScreen: true
+
+layout:
+  - type: 'imove'
+    title: 'Trip Reliability by Location'
+    server: "http://localhost:5000"
+    center: [145, -38]
+    zoom: 9
+
