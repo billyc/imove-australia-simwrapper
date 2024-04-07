@@ -224,12 +224,5 @@ def filter_dataframe():
 
     return json
 
-api = Api(app)
-
-# api.add_resource(FilesList, '/files/')
-# api.add_resource(File, '/files/<file_id>')
-# api.add_resource(JobsList, '/jobs/')
-# api.add_resource(Job, '/jobs/<job_id>')
-
 if __name__ == "__main__":
     app.run(port=4999, debug=False)
