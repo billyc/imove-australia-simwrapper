@@ -119,8 +119,13 @@ const MyComponent = defineComponent({
   data() {
     return {
       apiKey: '',
-      prompt: ['Select an intersection on the map', 'Select second intersection', '...'],
+      prompt: [
+        'Select an intersection on the map',
+        'Select second intersection',
+        'Querying data...',
+      ],
       selectedPaths: [] as any[],
+      serverRetries: 0,
       numTrips: 0,
       avgSpeed: 0,
       cvSpeed: 0,
@@ -559,14 +564,26 @@ const MyComponent = defineComponent({
       this.runStatistics()
     },
 
+    /** Try multiple times to fetch, as server might be asleep */
     async fetchTripsAtLocation(url: string) {
+      console.log('fetchTrips', this.serverRetries)
       const trips = (await fetch(url, {
         headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
       }).then(async response => {
-        if (response.status == 200) return response.json()
+        if (response.status == 200) {
+          this.serverRetries = 0
+          return response.json()
+        }
         if (response.status == 403) {
           // try again
+          this.serverRetries += 1
           this.forceApiAuthorization()
+          return await this.fetchTripsAtLocation(url)
+        } else if (this.serverRetries < 5) {
+          // wait 2 seconds and retry
+          this.serverRetries += 1
+          this.myState.statusMessage = `Contacting server... (${this.serverRetries})`
+          await new Promise(r => setTimeout(r, 2000))
           return await this.fetchTripsAtLocation(url)
         }
         throw Error('API ERROR: ' + response.statusText)
@@ -670,6 +687,15 @@ const MyComponent = defineComponent({
       localStorage.removeItem('imove-api-key')
       this.getApiAuthorization()
     },
+
+    async wakeUpServer() {
+      // this is a throwaway fetch that simply wakes up the API server when we load the site
+      try {
+        fetch(this.vizDetails.server)
+      } catch (e) {
+        // ignore
+      }
+    },
   },
 
   async mounted() {
@@ -682,9 +708,9 @@ const MyComponent = defineComponent({
     await this.getVizDetails()
 
     this.setupLogoMover()
-    console.log('ok')
 
     this.getApiAuthorization()
+    this.wakeUpServer()
   },
 
   beforeDestroy() {

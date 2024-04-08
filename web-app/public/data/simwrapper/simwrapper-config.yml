@@ -38,11 +38,14 @@ topNavBar:
 
   right:
     - text: 'Overview'
-      url: http://localhost:5173/
+      url: https://imove.billyc.cc
+      # url: http://localhost:5173
     - text: 'Explore'
-      url: http://localhost:5173/
+      url: https://imove.billyc.cc
+      # url: http://localhost:5173
     - text: 'Speeds'
-      url: http://localhost:5173/reliability
+      url: https://imove.billyc.cc/reliability
+      # url: http://localhost:5173/reliability
     - text: 'Point-to-Point'
-      url: http://localhost:5173/point-to-point
-
+      url: https://imove.billyc.cc/point-to-point
+      # url: http://localhost:5173/point-to-point
