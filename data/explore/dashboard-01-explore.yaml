@@ -1,7 +1,7 @@
 header:
-  tab: 'Overview'
+  tab: 'Explore'
   title: 'CompassIOT data exploration'
-  description: 'Small sample of parquet files'
+  description: 'Sample of Parquet files'
   fullScreen: true
 
 layout:
@@ -32,7 +32,7 @@ layout:
             y: end_lat
 
     - type: 'vehicles'
-      title: 'ZAnimation of Auto and HCV vehicles'
-      drtTrips: trips-ok.json
+      title: 'Animation of Auto and HCV vehicles'
+      drtTrips: trips_od.json
       center: [145, -38]
       zoom: 9

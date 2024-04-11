@@ -30,7 +30,7 @@ topNavBar:
 
   left:
     - text: 'iMOVE Australia'
-      url: ./base-case
+      url: https://imove.billyc.cc
       style:
         fontWeight: bold
         fontFamily: 'Roboto Slab'
@@ -41,8 +41,8 @@ topNavBar:
       url: https://imove.billyc.cc
       # url: http://localhost:5173
     - text: 'Explore'
-      url: https://imove.billyc.cc
-      # url: http://localhost:5173
+      url: https://imove.billyc.cc/explore
+      # url: http://localhost:5173/explore
     - text: 'Speeds'
       url: https://imove.billyc.cc/reliability
       # url: http://localhost:5173/reliability
