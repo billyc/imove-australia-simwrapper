@@ -21,12 +21,6 @@ export default function Component({
   viewId = 0,
   links = { source: new Float32Array(), dest: new Float32Array() },
   colorRampType = -1, // -1 undefined, 0 categorical, 1 diffs, 2 sequential
-  build = {} as LookupDataset,
-  base = {} as LookupDataset,
-  widths = {} as LookupDataset,
-  widthsBase = {} as LookupDataset,
-  newColors = new Uint8Array(),
-  newWidths = new Float32Array(),
   dark = false,
   projection = '',
   scaleWidth = 1,
@@ -39,12 +33,6 @@ export default function Component({
   const widthDivisor = scaleWidth ? 1 / scaleWidth : 0
 
   const [viewState, setViewState] = useState(globalStore.state.viewState)
-
-  const buildColumn = build.dataTable[build.activeColumn]
-  const baseColumn = base.dataTable[base.activeColumn]
-  const widthColumn = widths.dataTable[widths.activeColumn]
-
-  const isCategorical = colorRampType === 0 || buildColumn?.type == DataType.STRING
 
   // register setViewState in global view updater so we can respond to external map motion
   REACT_VIEW_HANDLES[viewId] = (view: any) => {
@@ -79,65 +67,13 @@ export default function Component({
     columnBase: DataTableColumn,
     geoOffset: number
   ) {
-    try {
-      if (!columnBuild) return null
-
-      const index = build.csvRowFromLinkRow[geoOffset]
-      let value = columnBuild.values[index]
-
-      if (isCategorical) {
-        if (!Number.isFinite(value)) return null
-        return `<b>${columnBuild.name}</b><p>${precise(value)}</p>`
-      }
-
-      let html = null
-
-      if (Number.isFinite(value)) html = `<b>${columnBuild.name}</b><p>Value: ${precise(value)}</p>`
-
-      const baseIndex = base?.csvRowFromLinkRow[geoOffset]
-      if (baseIndex) {
-        let baseValue = base ? base.dataTable[columnBase.name].values[baseIndex] : null
-        let diff = value - baseValue
-        if (Number.isFinite(baseValue)) {
-          html += `<p>Base: ${precise(baseValue)}</p>`
-          html += `<p>+/- Base: ${precise(diff)}</p>`
-        }
-      }
-
-      return html
-    } catch (e) {
-      return null
-    }
+    return null
   }
 
   function getTooltip({ object, index }: { object: any; index: number }) {
     // tooltip will show values for color settings and for width settings.
     // if there is base data, it will also show values and diff vs. base for both color and width.
-
-    try {
-      // tooltip color values ------------
-      let tooltip = buildTooltipHtml(buildColumn, baseColumn, index)
-
-      // tooltip widths------------
-      if (widthColumn && widthColumn.name !== buildColumn.name) {
-        const widthTip = buildTooltipHtml(
-          widthColumn,
-          widthsBase.dataTable[widthsBase.activeColumn],
-          index
-        )
-        if (widthTip) tooltip = tooltip ? tooltip + widthTip : widthTip
-      }
-
-      if (!tooltip) return null
-
-      return {
-        html: tooltip,
-        style: { color: dark ? '#ccc' : '#223', backgroundColor: dark ? '#2a3c4f' : 'white' },
-      }
-    } catch (e) {
-      console.warn(e)
-      return null
-    }
+    return null
   }
 
   // Atlantis is pre-converted now in the RoadNetworkLoader to lng/lat
