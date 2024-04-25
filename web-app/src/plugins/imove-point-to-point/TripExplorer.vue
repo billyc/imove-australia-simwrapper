@@ -19,15 +19,6 @@
       .flex1: b-button.flex1.is-small(expanded @click="toggleDay(8)" :type="dayOfWeek[8]") Mo-Fr
       .flex1: b-button.flex1.is-small(expanded @click="toggleDay(9)" :type="dayOfWeek[9]") Sa-Su
 
-    //- .flex(v-show="false")
-    //-   b-button.is-small(@click="toggleDay(0)" :type="dayOfWeek[0]") Mo
-    //-   b-button.is-small(@click="toggleDay(1)" :type="dayOfWeek[1]") Tu
-    //-   b-button.is-small(@click="toggleDay(2)" :type="dayOfWeek[2]") We
-    //-   b-button.is-small(@click="toggleDay(3)" :type="dayOfWeek[3]") Th
-    //-   b-button.is-small(@click="toggleDay(4)" :type="dayOfWeek[4]") Fr
-    //-   b-button.is-small(@click="toggleDay(5)" :type="dayOfWeek[5]") Sa
-    //-   b-button.is-small(@click="toggleDay(6)" :type="dayOfWeek[6]") Su
-
     p.button-section Vehicle Types
     .flex-row
       .flex1: b-button.is-small(expanded @click="toggleVehicle(0)" :type="vehType[0]") All
@@ -44,17 +35,34 @@
       p
         | Average speed:&nbsp;&nbsp;
         b: span(style="color: yellow") {{ Math.round(10* avgSpeed) / 10 }} km/h
+        p
+        | Std. deviation speed:&nbsp;&nbsp;
+        b: span(style="color: yellow") {{ Math.round(100* stdSpeed) / 100 }}
       p
         | Coeff. of variation:&nbsp;&nbsp;
-        b: span(style="color: yellow") {{ Math.round(10* cvSpeed) / 10 }}
+        b: span(style="color: yellow") {{ Math.round(100* cvSpeed) / 100 }}
 
-      vue-plotly.myplot(v-if="speedData.length"
-        :data="speedData"
-        :layout="layout"
-        :options="options"
-        id="speed-plot"
-      )
+    //- STATISTICS / BOXPLOT --------------
+    //- v-if="boxplot.length"
+    //- :class="{'is-filtering': isFiltering || isStatisticking}"
+    vue-plotly.stats-plot(v-if="boxplot.length"
+      :data="boxplot"
+      :layout="layoutBoxplot"
+      :options="options"
+      id="box-plot"
+    )
 
+    //- STATISTICS / Time vs. Distance -----------
+    //- v-if="speedData.length"
+    //- :class="{'is-filtering': isFiltering || isStatisticking}"
+    vue-plotly.stats-plot(v-if="speedData.length"
+      :data="speedData"
+      :layout="layoutSpeed"
+      :options="options"
+      id="speed-plot"
+    )
+
+  //- MAP PLOT WITH TRACES --------------
   .plot-container(:id="`container-${linkLayerId}`")
     link-layer.map-area(
         :viewId="linkLayerId"
@@ -119,6 +127,8 @@ const MyComponent = defineComponent({
   data() {
     return {
       apiKey: '',
+      isFiltering: false,
+      isStatisticking: false,
       prompt: [
         'Select an intersection on the map',
         'Select second intersection',
@@ -140,12 +150,13 @@ const MyComponent = defineComponent({
       numIntersectionsSelected: 0,
       radius: 0.0002,
       speedData: [] as any[],
+      boxplot: [] as any[],
       globalState: globalStore.state,
-      layout: {
+      layoutSpeed: {
         paper_bgcolor: '#223', // BG_COLOR_DASHBOARD.dark,
         plot_bgcolor: '#223', // BG_COLOR_DASHBOARD.dark,
         font: { family: UI_FONT, color: '#cccccc' },
-        height: 225,
+        autosize: true,
         margin: { t: 8, b: 2, l: 0, r: 0, pad: 2 },
         xaxis: {
           automargin: true,
@@ -157,6 +168,31 @@ const MyComponent = defineComponent({
           automargin: true,
           autorange: true,
           title: { text: 'Seconds', standoff: 16 },
+          animate: true,
+        },
+        legend: false,
+        // {
+        //   orientation: 'h',
+        //   x: 1,
+        //   y: 1,
+        // },
+      },
+      layoutBoxplot: {
+        paper_bgcolor: '#223', // BG_COLOR_DASHBOARD.dark,
+        plot_bgcolor: '#223', // BG_COLOR_DASHBOARD.dark,
+        font: { family: UI_FONT, color: '#cccccc' },
+        autosize: true,
+        margin: { t: 8, b: 2, l: 0, r: 0, pad: 2 },
+        xaxis: {
+          automargin: true,
+          autorange: true,
+          title: '',
+          animate: true,
+        },
+        yaxis: {
+          automargin: true,
+          autorange: true,
+          title: { text: 'Speed, km/h', standoff: 16 },
           animate: true,
         },
         legend: false,
@@ -386,6 +422,8 @@ const MyComponent = defineComponent({
     },
 
     runStatistics() {
+      this.isStatisticking = true
+
       const distanceAndTime = [] as any[]
       let minDistance = Infinity
 
@@ -473,26 +511,49 @@ const MyComponent = defineComponent({
         },
       ]
 
-      // calc metrics: avg speed, coeff of variance
-      const speeds = clipped.map(p => (3600 * p[0]) / p[1]) // km/hour
-      const meanSpeed = mean(speeds)
-      const stdSpeed = std(speeds) as any
-      const cv = stdSpeed / meanSpeed
-      console.log({ meanSpeed, stdSpeed, cv })
+      let speeds = [] as any[]
 
-      this.avgSpeed = meanSpeed
-      this.cvSpeed = cv
-      this.stdSpeed = stdSpeed
+      try {
+        // calc metrics: avg speed, coeff of variance
+        speeds = clipped.map(p => (3600 * p[0]) / p[1]) // km/hour
+        const meanSpeed = mean(speeds)
+        const stdSpeed = std(speeds) as any
+        const cv = stdSpeed / meanSpeed
+        console.log({ meanSpeed, stdSpeed, cv })
+        this.avgSpeed = meanSpeed
+        this.cvSpeed = cv
+        this.stdSpeed = stdSpeed
+      } catch (e) {
+        console.error('' + e)
+      }
+
+      // BOX PLOT
+      this.boxplot = [
+        {
+          y: speeds,
+          boxpoints: 'all',
+          jitter: 0.3,
+          pointpos: -1.5,
+          type: 'box',
+          name: '',
+          marker: { size: 3, color: '#37f' },
+        },
+      ]
 
       //   const sum = data.speeds.reduce((a: number, b: number) => a + b)
       //   const avgSpeed = sum / data.speeds.length
       //   this.avgSpeed = avgSpeed
       // }
+      this.isStatisticking = false
     },
 
     async updateFilter() {
-      console.log('update filter!', this.unfilteredTrips.length)
       if (!this.unfilteredTrips.length) return
+
+      console.log('update filter!', this.unfilteredTrips.length)
+      this.isFiltering = true
+
+      // this.myState.statusMessage = '...filtering data...'
 
       const selectedPaths = [] as any[]
 
@@ -503,6 +564,7 @@ const MyComponent = defineComponent({
       if (numUnfilteredTrips == 0) {
         // NO NEW TRIPS
         this.numTrips = -1
+        this.isFiltering = false
         return
       }
 
@@ -537,6 +599,7 @@ const MyComponent = defineComponent({
           }).then(response => response.json())
         } catch (e) {
           this.myState.statusMessage = 'Error fetching paths :-('
+          this.isFiltering = false
           return
         }
 
@@ -561,6 +624,7 @@ const MyComponent = defineComponent({
         numFilteredTrips += paths.length
         this.numTrips = numFilteredTrips
       }
+      this.isFiltering = false
       this.runStatistics()
     },
 
@@ -599,6 +663,9 @@ const MyComponent = defineComponent({
 
       if (this.numIntersectionsSelected == 3) {
         this.clearMap()
+        this.speedData = []
+        this.boxplot = []
+        this.avgSpeed = 0
       }
 
       // all done if we do not have BOTH start and end selected
@@ -761,6 +828,7 @@ export default MyComponent
   // border-left: 1px solid #557;
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .info-panel {
@@ -866,9 +934,10 @@ input {
   margin-bottom: 1rem;
 }
 
-.myplot {
-  margin-top: 0.5rem;
+.stats-plot {
+  margin-bottom: 1rem;
   border: 1px solid #555;
+  flex: 1;
 }
 
 h2 {
@@ -892,6 +961,10 @@ h2 {
   width: 20rem;
   margin: 0 auto;
   z-index: 10;
+}
+
+.is-filtering {
+  opacity: 0.75;
 }
 </style>
 ./DeckLayers
