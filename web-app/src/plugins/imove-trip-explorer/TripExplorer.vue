@@ -139,11 +139,6 @@ const MyComponent = defineComponent({
           animate: true,
         },
         legend: false,
-        // {
-        //   orientation: 'h',
-        //   x: 1,
-        //   y: 1,
-        // },
       },
       options: {
         displaylogo: false,
@@ -362,7 +357,8 @@ const MyComponent = defineComponent({
     },
 
     async fetchWithAuthorization(url: string) {
-      console.log('fetchTrips', this.serverRetries)
+      console.log('fetchTrips attempt', this.serverRetries + 1)
+
       const trips = (await fetch(url, {
         headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
       }).then(async response => {
@@ -460,15 +456,17 @@ const MyComponent = defineComponent({
 
     async clickedCoordinate(coord: number[]) {
       const [lon, lat] = coord
-      console.log({ lon, lat })
-
+      const radius = 10
       const server = this.vizDetails.server
 
       // GET TRIP LIST
-      const url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
+      const url = `${server}/rpc/trips_at_location?lon=${lon}&lat=${lat}&radius=${radius}`
+
+      console.log({ lon, lat, radius })
       console.log(url)
+
       const trips = await this.fetchWithAuthorization(url)
-      // console.log({ trips })
+      console.log({ trips })
 
       if (!trips.length) {
         this.selectedPaths = []
@@ -490,10 +488,14 @@ const MyComponent = defineComponent({
         console.log('loading', i)
         const tripIDs = trips
           .slice(i, i + chunk)
-          .map((trip: any) => trip.TripID)
+          .map((trip: any) => trip.trip_id)
           .join(',')
-        const pathUrl = `${server}/path?trip=${tripIDs}`
+
+        const pathUrl = `${server}/trips?id=in.(${tripIDs})`
+
         console.log('path length:', pathUrl.length)
+        console.log(pathUrl)
+
         const paths = await this.fetchWithAuthorization(pathUrl)
 
         for (const trip of paths) {

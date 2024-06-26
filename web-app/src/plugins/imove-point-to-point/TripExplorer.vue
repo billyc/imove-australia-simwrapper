@@ -570,8 +570,8 @@ const MyComponent = defineComponent({
 
       // build filters
       let filters = ''
-      if (this.dayOfWeek[8]) filters += '&is_weekday=true'
-      if (this.dayOfWeek[9]) filters += '&is_weekday=false'
+      if (this.dayOfWeek[8]) filters += '&is_weekday=is.true'
+      if (this.dayOfWeek[9]) filters += '&is_weekday=is.false'
       if (this.timeOfDay[1]) filters += '&start_time=08'
       if (this.timeOfDay[2]) filters += '&start_time=13'
       if (this.timeOfDay[3]) filters += '&start_time=17'
@@ -580,7 +580,7 @@ const MyComponent = defineComponent({
       console.log(111, filters)
 
       // only fetch 800 at a time due to URL length limits
-      const chunk = 807
+      const chunk = 500
 
       let i = 0
       let numFilteredTrips = 0
@@ -588,8 +588,12 @@ const MyComponent = defineComponent({
       while (i < numUnfilteredTrips) {
         console.log(i)
         const tripIDs = this.unfilteredTrips.slice(i, i + chunk).join(',')
-        const pathUrl = `${this.vizDetails.server}/path?trip=${tripIDs}${filters}`
+
+        const pathUrl = `${this.vizDetails.server}/trips?id=in.(${tripIDs})${filters}`
+
         console.log('path length:', pathUrl.length)
+        console.log(pathUrl)
+
         let paths = [] as any[]
 
         try {
@@ -630,7 +634,7 @@ const MyComponent = defineComponent({
 
     /** Try multiple times to fetch, as server might be asleep */
     async fetchTripsAtLocation(url: string) {
-      console.log('fetchTrips', this.serverRetries)
+      console.log('fetchTrips attempt', this.serverRetries + 1)
       const trips = (await fetch(url, {
         headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
       }).then(async response => {
@@ -679,10 +683,14 @@ const MyComponent = defineComponent({
 
       try {
         this.myState.statusMessage = ''
+
         // GET START TRIP LIST
         const [lon, lat] = this.startCoord
-        console.log({ lon, lat })
-        let url = `${server}/location?lon=${lon}&lat=${lat}&radius=0.0002`
+        const radius = 10 // meters
+
+        let url = `${server}/rpc/trips_at_location?lon=${lon}&lat=${lat}&radius=${radius}`
+
+        console.log({ lon, lat, radius })
         console.log(url)
 
         startTrips = await this.fetchTripsAtLocation(url)
@@ -694,8 +702,9 @@ const MyComponent = defineComponent({
 
         // GET END TRIP LIST
         const [lon2, lat2] = this.endCoord
+        url = `${server}/rpc/trips_at_location?lon=${lon2}&lat=${lat2}&radius=${radius}`
+
         console.log({ lon2, lat2 })
-        url = `${server}/location?lon=${lon2}&lat=${lat2}&radius=0.0002`
         console.log(url)
 
         endTrips = await this.fetchTripsAtLocation(url)
@@ -711,16 +720,17 @@ const MyComponent = defineComponent({
       }
 
       // FIGURE OUT UNION
-      const startT = startTrips.map((t: any) => t.TripID)
-      const endT = endTrips.map((t: any) => t.TripID)
-      // console.log({ startT, endT })
+      console.log('GET UNION')
 
       const union = []
-      for (let TT of startT) {
-        if (endT.includes(TT)) union.push(TT)
-      }
+      const startT = startTrips.map((t: any) => t.trip_id)
+      const endT = endTrips.map((t: any) => t.trip_id)
+
+      for (let TT of startT) if (endT.includes(TT)) union.push(TT)
 
       this.unfilteredTrips = union
+
+      console.log({ startT, endT, union })
 
       this.updateFilter()
     },

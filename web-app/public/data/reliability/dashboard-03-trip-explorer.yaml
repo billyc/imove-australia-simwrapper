@@ -6,6 +6,7 @@ header:
 layout:
   - type: 'imove'
     title: 'Trip Reliability by Location'
-    server: 'https://imove-api-server.fly.dev'
+    server: 'http://45.113.234.113/imove-api'
+    # server: 'https://imove-api-server.fly.dev'
     center: [145, -38]
     zoom: 9
