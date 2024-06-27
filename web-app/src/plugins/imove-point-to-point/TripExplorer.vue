@@ -412,7 +412,7 @@ const MyComponent = defineComponent({
       try {
         if (event.coordinate) {
           await this.clickedCoordinate(event.coordinate)
-          // await this.runStatisticsForCoord(event.coordinate)
+          await this.buildPaths()
         }
       } catch (e) {
         console.error('bad!' + e)
@@ -547,6 +547,31 @@ const MyComponent = defineComponent({
       this.isStatisticking = false
     },
 
+    async buildPaths() {
+      if (!this.unfilteredTrips.length) return []
+
+      const selectedPaths = []
+
+      for (const trip of this.unfilteredTrips) {
+        const points = trip.points as {
+          speed: number
+          point_timestamp: string
+          point_snapped: { coordinates: number[] }
+        }[]
+
+        const coords = points.map(p => p.point_snapped.coordinates)
+        const speeds = points.map(p => p.speed)
+        const timestamps = points.map(p => p.point_timestamp.substring(11, 19))
+        const startTime = trip.points[0].point_timestamp.substring(11, 13)
+
+        selectedPaths.push({ path: coords, speeds, startTime, timestamps })
+      }
+
+      this.selectedPaths = selectedPaths
+      this.numTrips = selectedPaths.length
+      this.runStatistics()
+    },
+
     async updateFilter() {
       if (!this.unfilteredTrips.length) return
 
@@ -577,6 +602,7 @@ const MyComponent = defineComponent({
       if (this.timeOfDay[3]) filters += '&start_time=17'
       if (this.vehType[1]) filters += '&veh_type=car'
       if (this.vehType[2]) filters += '&veh_type=HCV'
+
       console.log(111, filters)
 
       // only fetch 800 at a time due to URL length limits
@@ -677,62 +703,47 @@ const MyComponent = defineComponent({
 
       const server = this.vizDetails.server
 
-      // JSON response will go here:
-      let startTrips = [] as any[]
-      let endTrips = [] as any[]
-
       try {
         this.myState.statusMessage = ''
 
-        // GET START TRIP LIST
+        // GET A-B TRIP LIST
         const [lon, lat] = this.startCoord
+        const [lon2, lat2] = this.endCoord
         const radius = 10 // meters
 
-        let url = `${server}/rpc/trips_at_location?lon=${lon}&lat=${lat}&radius=${radius}`
+        let url =
+          `${server}/rpc/trips_at_ab?` +
+          `lon_a=${lon}&lat_a=${lat}` +
+          `&lon_b=${lon2}&lat_b=${lat2}&radius=${radius}`
 
-        console.log({ lon, lat, radius })
+        console.log({ lon, lat, lon2, lat2, radius })
         console.log(url)
 
-        startTrips = await this.fetchTripsAtLocation(url)
-        if (!startTrips.length) {
-          this.selectedPaths = []
-          this.numTrips = -1
-          return
+        let allTrips = [] as any
+        let tranchSize = 1000
+        let numTranches = 0
+
+        while (true) {
+          console.log('get tranch', numTranches)
+          let abTrips = await this.fetchTripsAtLocation(url + `&offset=${numTranches * tranchSize}`)
+          if (!abTrips.length && numTranches == 0) {
+            this.selectedPaths = []
+            this.numTrips = -1
+            return
+          }
+
+          console.log({ abTrips })
+          allTrips = allTrips.concat(abTrips)
+
+          // final tranch?
+          if (abTrips.length < 1000) break
         }
 
-        // GET END TRIP LIST
-        const [lon2, lat2] = this.endCoord
-        url = `${server}/rpc/trips_at_location?lon=${lon2}&lat=${lat2}&radius=${radius}`
-
-        console.log({ lon2, lat2 })
-        console.log(url)
-
-        endTrips = await this.fetchTripsAtLocation(url)
-        if (!endTrips.length) {
-          this.selectedPaths = []
-          this.numTrips = -1
-          return
-        }
+        console.log('broke here', { allTrips })
+        this.unfilteredTrips = allTrips
       } catch (e) {
-        const err = e as any
-        console.error({ err })
-        this.myState.statusMessage = err.message || 'Error fetching paths :-('
+        console.error(e)
       }
-
-      // FIGURE OUT UNION
-      console.log('GET UNION')
-
-      const union = []
-      const startT = startTrips.map((t: any) => t.trip_id)
-      const endT = endTrips.map((t: any) => t.trip_id)
-
-      for (let TT of startT) if (endT.includes(TT)) union.push(TT)
-
-      this.unfilteredTrips = union
-
-      console.log({ startT, endT, union })
-
-      this.updateFilter()
     },
 
     setupLogoMover() {

@@ -357,14 +357,10 @@ const MyComponent = defineComponent({
     },
 
     async fetchWithAuthorization(url: string) {
-      console.log('fetchTrips attempt', this.serverRetries + 1)
-
       const trips = (await fetch(url, {
         headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
       }).then(async response => {
-        console.log(1, { response })
         if (response.status == 200) {
-          console.log(200)
           this.serverRetries = 0
           return response.json()
         }
@@ -407,7 +403,7 @@ const MyComponent = defineComponent({
 
       for (const selectedPath of this.selectedPaths) {
         const path = selectedPath.path
-        console.log('  number of POINTS:', path.length)
+        // console.log('  number of POINTS:', path.length)
 
         let lastSelectedPointIndex = 0
         for (let i = 0; i < path.length; i++) {
@@ -416,12 +412,12 @@ const MyComponent = defineComponent({
             lastSelectedPointIndex = i
           }
         }
-        console.log('  i:', lastSelectedPointIndex)
+        // console.log('  i:', lastSelectedPointIndex)
 
         // might be at end of array, don't panic
         try {
           const speed = selectedPath.speeds[lastSelectedPointIndex]
-          const startTime = parseInt(selectedPath.startTime.substring(0, 2))
+          const startTime = parseInt(selectedPath.startTime.substring(11, 13))
           if (speed == 0) continue
 
           data.time.push(startTime)
@@ -456,7 +452,7 @@ const MyComponent = defineComponent({
 
     async clickedCoordinate(coord: number[]) {
       const [lon, lat] = coord
-      const radius = 10
+      const radius = 20
       const server = this.vizDetails.server
 
       // GET TRIP LIST
@@ -465,53 +461,48 @@ const MyComponent = defineComponent({
       console.log({ lon, lat, radius })
       console.log(url)
 
-      const trips = await this.fetchWithAuthorization(url)
-      console.log({ trips })
-
-      if (!trips.length) {
-        this.selectedPaths = []
-        this.numTrips = 0
-        return
-      }
-
       // BUILD PATHS
-      const selectedPaths = [] as any[]
-
-      // GET FULL PATHS FOR SELECTED TRIPS
-      this.numTrips = trips.length
-
-      // only fetch 800 at a time due to URL length limits
-      const chunk = 807
+      this.selectedPaths = [] as any
 
       let i = 0
-      while (i < this.numTrips) {
-        console.log('loading', i)
-        const tripIDs = trips
-          .slice(i, i + chunk)
-          .map((trip: any) => trip.trip_id)
-          .join(',')
+      const tranchSize = 1000
 
-        const pathUrl = `${server}/trips?id=in.(${tripIDs})`
+      while (true) {
+        console.log('loading tranch', i + 1)
 
-        console.log('path length:', pathUrl.length)
-        console.log(pathUrl)
+        const trips = await this.fetchWithAuthorization(url + `&offset=${tranchSize * i}`)
+        console.log({ trips })
 
-        const paths = await this.fetchWithAuthorization(pathUrl)
-
-        for (const trip of paths) {
-          const snappedPath = trip.Path1
-          const coords = snappedPath
-            .split(',')
-            .map((point: string) => point.split(' ').map(p => parseFloat(p)))
-
-          const speeds = trip.Speed_path.split(',').map((speed: any) => parseFloat(speed))
-
-          selectedPaths.push({ path: coords, speeds, startTime: trip.start_time })
+        if (!trips.length && i == 0) {
+          this.selectedPaths = []
+          this.numTrips = 0
+          return
         }
-        this.selectedPaths = [...selectedPaths]
+
+        const selectedPaths = [] as any[]
+
+        for (const trip of trips) {
+          const points = trip.points as {
+            speed: number
+            point_timestamp: string
+            point_snapped: { coordinates: number[] }
+          }[]
+
+          const coords = points.map(p => p.point_snapped.coordinates)
+          const speeds = points.map(p => p.speed)
+          const startTime = trip.points[0].point_timestamp
+          // const timestamps = points.map(p => p.point_timestamp.substring(11, 19))
+
+          selectedPaths.push({ path: coords, speeds, startTime })
+        }
+
+        this.selectedPaths = this.selectedPaths.concat(selectedPaths)
         await this.$nextTick()
-        i += chunk
+        if (selectedPaths.length < tranchSize) break
       }
+
+      // GET FULL PATHS FOR SELECTED TRIPS
+      this.numTrips = this.selectedPaths.length
     },
 
     setMapCenterFromVizDetails() {
