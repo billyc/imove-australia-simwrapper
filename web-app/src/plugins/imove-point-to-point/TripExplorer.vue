@@ -624,31 +624,23 @@ const MyComponent = defineComponent({
     },
 
     /** Try multiple times to fetch, as server might be asleep */
-    async fetchTripsAtLocation(url: string) {
+    async fetchTripsAtLocation(url: string): Promise<any> {
       console.log('fetchTrips attempt', this.serverRetries + 1)
-      const trips = (await fetch(url, {
-        headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
-      }).then(async response => {
-        if (response.status == 200) {
-          this.serverRetries = 0
-          return response.json()
-        }
-        if (response.status == 403) {
-          // try again
-          this.serverRetries += 1
-          this.forceApiAuthorization()
-          return await this.fetchTripsAtLocation(url)
-        } else if (this.serverRetries < 5) {
-          // wait 2 seconds and retry
-          this.serverRetries += 1
-          this.myState.statusMessage = `Contacting server... (${this.serverRetries})`
-          await new Promise(r => setTimeout(r, 2000))
-          return await this.fetchTripsAtLocation(url)
-        }
-        throw Error('API ERROR: ' + response.statusText)
-      })) as any[]
 
-      return trips
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: this.apiKey,
+            'api-key': this.apiKey,
+            'Access-Control-Allow-Origin': '*',
+          },
+        })
+        return await response.json()
+      } catch (e) {
+        console.log('failed. auth?')
+        this.forceApiAuthorization()
+        return this.fetchTripsAtLocation(url)
+      }
     },
 
     async clickedCoordinate(coord: number[]) {
@@ -683,19 +675,6 @@ const MyComponent = defineComponent({
 
         console.log({ lon, lat, lon2, lat2, radius })
         console.log(locationUrl)
-
-        // // FIGURE OUT FILTERS
-        // let filters = ''
-        // if (this.dayOfWeek[8]) filters += '&is_weekday=is.true'
-        // if (this.dayOfWeek[9]) filters += '&is_weekday=is.false'
-        // if (this.vehType[1]) filters += '&veh_type=car'
-        // if (this.vehType[2]) filters += '&veh_type=HCV'
-
-        // const startDate = '2022-04-01'
-        // const endDate = '2022-04-01'
-        // let daterange = `&start_time=${startDate}T${this.filterStartTime}&end_time=${endDate}T${this.filterEndTime}`
-        // url = url + filters + daterange
-        // console.log(url)
 
         let allTrips = [] as any
         let tranchSize = 1000
@@ -736,6 +715,7 @@ const MyComponent = defineComponent({
         console.log('broke here', { allTrips })
         this.unfilteredTrips = allTrips
       } catch (e) {
+        console.log('BAAAD! 712')
         console.error(e)
       }
     },
