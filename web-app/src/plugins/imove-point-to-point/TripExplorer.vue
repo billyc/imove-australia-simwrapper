@@ -27,7 +27,7 @@
 
     .statistics
       h4: b Trips
-      p(v-if="numTrips > 0") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found
+      p(v-if="numTrips > 0") {{numTrips}} trip{{ numTrips == 1 ? '' : 's'}} found ({{ selectedPaths.length }} selected)
       h4(v-else) &nbsp;
 
     .reliability(v-if="avgSpeed")
@@ -127,6 +127,9 @@ const MyComponent = defineComponent({
   data() {
     return {
       apiKey: '',
+      filterStartTime: '',
+      filterVehType: '',
+      filterWeekday: undefined as any,
       isFiltering: false,
       isStatisticking: false,
       prompt: [
@@ -134,6 +137,7 @@ const MyComponent = defineComponent({
         'Select second intersection',
         'Querying data...',
       ],
+      allPaths: [] as any[],
       selectedPaths: [] as any[],
       serverRetries: 0,
       numTrips: 0,
@@ -337,10 +341,14 @@ const MyComponent = defineComponent({
       this.endCoord = []
       this.numTrips = 0
       this.numIntersectionsSelected = 0
+      this.allPaths = []
       this.selectedPaths = []
     },
 
     toggleDay(i: number) {
+      if (i == 7) this.filterWeekday = undefined
+      if (i == 8) this.filterWeekday = true
+      if (i == 9) this.filterWeekday = false
       this.dayOfWeek = ['', '', '', '', '', '', '', '', '', '']
       this.dayOfWeek[i] = 'is-warning'
       this.updateFilter()
@@ -349,6 +357,21 @@ const MyComponent = defineComponent({
     toggleTime(i: number) {
       this.timeOfDay = ['', '', '']
       this.timeOfDay[i] = 'is-success'
+      switch (i) {
+        case 1:
+          this.filterStartTime = '08'
+          break
+        case 2:
+          this.filterStartTime = '13'
+          break
+        case 3:
+          this.filterStartTime = '17'
+          break
+        case 0:
+        default:
+          this.filterStartTime = ''
+          break
+      }
       this.updateFilter()
     },
 
@@ -356,6 +379,9 @@ const MyComponent = defineComponent({
       // radio buttons - only one selection
       this.vehType = ['', '', '']
       this.vehType[i] = 'is-success'
+      if (i == 0) this.filterVehType = ''
+      if (i == 1) this.filterVehType = 'car'
+      if (i == 2) this.filterVehType = 'HCV'
       this.updateFilter()
     },
 
@@ -495,7 +521,8 @@ const MyComponent = defineComponent({
       // because some trips are not directly between the two points
       const clipValue = minDistance * 1.5
       const clipped = distanceAndTime.filter(p => p[0] < clipValue)
-      console.log({ clipped })
+      console.log(distanceAndTime.length - clipped.length, 'outliers filtered')
+
       this.speedData = [
         {
           x: clipped.map(p => p[0]),
@@ -519,7 +546,7 @@ const MyComponent = defineComponent({
         const meanSpeed = mean(speeds)
         const stdSpeed = std(speeds) as any
         const cv = stdSpeed / meanSpeed
-        console.log({ meanSpeed, stdSpeed, cv })
+        // console.log({ meanSpeed, stdSpeed, cv })
         this.avgSpeed = meanSpeed
         this.cvSpeed = cv
         this.stdSpeed = stdSpeed
@@ -550,10 +577,12 @@ const MyComponent = defineComponent({
     async buildPaths() {
       if (!this.unfilteredTrips.length) return []
 
-      const selectedPaths = []
+      const paths = []
 
       for (const trip of this.unfilteredTrips) {
         const points = trip.points as {
+          is_weekday: boolean
+          veh_type: string
           speed: number
           point_timestamp: string
           point_snapped: { coordinates: number[] }
@@ -562,99 +591,35 @@ const MyComponent = defineComponent({
         const coords = points.map(p => p.point_snapped.coordinates)
         const speeds = points.map(p => p.speed)
         const timestamps = points.map(p => p.point_timestamp.substring(11, 19))
-        const startTime = trip.points[0].point_timestamp.substring(11, 13)
+        const startHour = trip.points[0].point_timestamp.substring(11, 13)
+        const isWeekday = points[0].is_weekday
+        const vehType = points[0].veh_type
 
-        selectedPaths.push({ path: coords, speeds, startTime, timestamps })
+        paths.push({ vehType, isWeekday, path: coords, speeds, startHour, timestamps })
       }
 
-      this.selectedPaths = selectedPaths
-      this.numTrips = selectedPaths.length
-      this.runStatistics()
+      this.selectedPaths = paths
+      this.allPaths = paths
+      this.numTrips = paths.length
+      this.updateFilter()
     },
 
     async updateFilter() {
       if (!this.unfilteredTrips.length) return
 
-      console.log('update filter!', this.unfilteredTrips.length)
       this.isFiltering = true
 
-      // this.myState.statusMessage = '...filtering data...'
+      let selectedPaths = this.allPaths
 
-      const selectedPaths = [] as any[]
+      if (this.filterStartTime)
+        selectedPaths = selectedPaths.filter(trip => trip.startHour == this.filterStartTime)
+      if (this.filterVehType)
+        selectedPaths = selectedPaths.filter(trip => trip.vehType == this.filterVehType)
+      if (this.filterWeekday !== undefined)
+        selectedPaths = selectedPaths.filter(trip => trip.isWeekday == this.filterWeekday)
 
-      // GET FULL PATHS FOR SELECTED (but unfiltered) TRIPS
-      const numUnfilteredTrips = this.unfilteredTrips.length
-      console.log('UNFILTERED trips', numUnfilteredTrips)
-
-      if (numUnfilteredTrips == 0) {
-        // NO NEW TRIPS
-        this.numTrips = -1
-        this.isFiltering = false
-        return
-      }
-
-      // build filters
-      let filters = ''
-      if (this.dayOfWeek[8]) filters += '&is_weekday=is.true'
-      if (this.dayOfWeek[9]) filters += '&is_weekday=is.false'
-      if (this.timeOfDay[1]) filters += '&start_time=08'
-      if (this.timeOfDay[2]) filters += '&start_time=13'
-      if (this.timeOfDay[3]) filters += '&start_time=17'
-      if (this.vehType[1]) filters += '&veh_type=car'
-      if (this.vehType[2]) filters += '&veh_type=HCV'
-
-      console.log(111, filters)
-
-      // only fetch 800 at a time due to URL length limits
-      const chunk = 500
-
-      let i = 0
-      let numFilteredTrips = 0
-
-      while (i < numUnfilteredTrips) {
-        console.log(i)
-        const tripIDs = this.unfilteredTrips.slice(i, i + chunk).join(',')
-
-        const pathUrl = `${this.vizDetails.server}/trips?id=in.(${tripIDs})${filters}`
-
-        console.log('path length:', pathUrl.length)
-        console.log(pathUrl)
-
-        let paths = [] as any[]
-
-        try {
-          this.myState.statusMessage = ''
-          paths = await fetch(pathUrl, {
-            headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
-          }).then(response => response.json())
-        } catch (e) {
-          this.myState.statusMessage = 'Error fetching paths :-('
-          this.isFiltering = false
-          return
-        }
-
-        for (const trip of paths) {
-          const snappedPath = trip.Path1
-          const coords = snappedPath
-            .split(',')
-            .map((point: string) => point.split(' ').map(p => parseFloat(p)))
-
-          const speeds = trip.Speed_path.split(',').map((speed: any) => parseFloat(speed))
-          const timestamps = trip.Timestamp_path.split(',').map((date: string) =>
-            date.substring(11, 19)
-          )
-
-          selectedPaths.push({ path: coords, speeds, startTime: trip.start_time, timestamps })
-        }
-
-        this.selectedPaths = [...selectedPaths]
-        await this.$nextTick()
-
-        i += chunk
-        numFilteredTrips += paths.length
-        this.numTrips = numFilteredTrips
-      }
-      this.isFiltering = false
+      this.selectedPaths = selectedPaths
+      console.log(this.selectedPaths.length, 'filtered trips')
       this.runStatistics()
     },
 
@@ -711,32 +676,61 @@ const MyComponent = defineComponent({
         const [lon2, lat2] = this.endCoord
         const radius = 10 // meters
 
-        let url =
+        let locationUrl =
           `${server}/rpc/trips_at_ab?` +
           `lon_a=${lon}&lat_a=${lat}` +
           `&lon_b=${lon2}&lat_b=${lat2}&radius=${radius}`
 
         console.log({ lon, lat, lon2, lat2, radius })
-        console.log(url)
+        console.log(locationUrl)
+
+        // // FIGURE OUT FILTERS
+        // let filters = ''
+        // if (this.dayOfWeek[8]) filters += '&is_weekday=is.true'
+        // if (this.dayOfWeek[9]) filters += '&is_weekday=is.false'
+        // if (this.vehType[1]) filters += '&veh_type=car'
+        // if (this.vehType[2]) filters += '&veh_type=HCV'
+
+        // const startDate = '2022-04-01'
+        // const endDate = '2022-04-01'
+        // let daterange = `&start_time=${startDate}T${this.filterStartTime}&end_time=${endDate}T${this.filterEndTime}`
+        // url = url + filters + daterange
+        // console.log(url)
 
         let allTrips = [] as any
         let tranchSize = 1000
         let numTranches = 0
 
-        while (true) {
-          console.log('get tranch', numTranches)
-          let abTrips = await this.fetchTripsAtLocation(url + `&offset=${numTranches * tranchSize}`)
-          if (!abTrips.length && numTranches == 0) {
-            this.selectedPaths = []
-            this.numTrips = -1
-            return
+        for (const i of [1, 2, 3, 4, 5, 6, 7]) {
+          const date = `2022-04-0${i}`
+          console.log('FETCH DATE', date)
+          this.myState.statusMessage = `Fetching trips for ${date}...`
+          const timeFilter = `&start_time=${date}T00:00:00&end_time=${date}T23:59:59`
+          const url = locationUrl + timeFilter
+
+          while (true) {
+            if (numTranches > 0) console.log('  get tranch', numTranches + 1)
+
+            let abTrips = await this.fetchTripsAtLocation(
+              url + `&offset=${numTranches * tranchSize}`
+            )
+
+            console.log({ abTrips })
+            allTrips = allTrips.concat(abTrips)
+
+            // final tranch?
+            if (abTrips.length < 1000) break
+
+            numTranches += 1
           }
+        }
 
-          console.log({ abTrips })
-          allTrips = allTrips.concat(abTrips)
+        this.myState.statusMessage = ''
 
-          // final tranch?
-          if (abTrips.length < 1000) break
+        if (!allTrips.length) {
+          this.selectedPaths = []
+          this.numTrips = -1
+          return
         }
 
         console.log('broke here', { allTrips })
