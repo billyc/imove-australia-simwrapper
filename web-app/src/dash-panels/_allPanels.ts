@@ -5,7 +5,6 @@ import { AsyncComponent, defineAsyncComponent } from 'vue'
 
 // resizable charts:
 export const panelLookup: { [key: string]: AsyncComponent } = {
-  aggregate: defineAsyncComponent(() => import('./aggregate-od.vue')),
   area: defineAsyncComponent(() => import('./area.vue')),
   bar: defineAsyncComponent(() => import('./bar.vue')),
   bubble: defineAsyncComponent(() => import('./bubble.vue')),
@@ -16,21 +15,16 @@ export const panelLookup: { [key: string]: AsyncComponent } = {
   line: defineAsyncComponent(() => import('./line.vue')),
   pie: defineAsyncComponent(() => import('./pie.vue')),
   plotly: defineAsyncComponent(() => import('./plotly.vue')),
-  sankey: defineAsyncComponent(() => import('./sankey.vue')),
   scatter: defineAsyncComponent(() => import('./scatter.vue')),
   slideshow: defineAsyncComponent(() => import('./slideshow.vue')),
   text: defineAsyncComponent(() => import('./text.vue')),
   tile: defineAsyncComponent(() => import('./tile.vue')),
-  transit: defineAsyncComponent(() => import('./transit.vue')),
   vega: defineAsyncComponent(() => import('./vega.vue')),
   vehicles: defineAsyncComponent(() => import('./vehicles.vue')),
   video: defineAsyncComponent(() => import('./video.vue')),
   xml: defineAsyncComponent(() => import('./xml.vue')),
 
   // full-screen map visualizations:
-  carriers: defineAsyncComponent(() => import('./carriers.vue')),
-  flowmap: defineAsyncComponent(() => import('./flowmap.vue')),
-  links: defineAsyncComponent(() => import('./links.vue')),
   map: defineAsyncComponent(() => import('./area-map.vue')),
   xytime: defineAsyncComponent(() => import('./xytime.vue')),
   imove: defineAsyncComponent(() => import('./imove.vue')),
