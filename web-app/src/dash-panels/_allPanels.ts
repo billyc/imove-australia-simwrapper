@@ -22,7 +22,6 @@ export const panelLookup: { [key: string]: AsyncComponent } = {
   vega: defineAsyncComponent(() => import('./vega.vue')),
   vehicles: defineAsyncComponent(() => import('./vehicles.vue')),
   video: defineAsyncComponent(() => import('./video.vue')),
-  xml: defineAsyncComponent(() => import('./xml.vue')),
 
   // full-screen map visualizations:
   map: defineAsyncComponent(() => import('./area-map.vue')),
