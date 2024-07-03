@@ -4,6 +4,7 @@ import { COORDINATE_SYSTEM } from '@deck.gl/core'
 
 import { OFFSET_DIRECTION } from '@/layers/LineOffsetLayer'
 import PathOffsetLayer from '@/layers/PathOffsetLayer'
+import { ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 
 import { StaticMap } from 'react-map-gl'
 import { format } from 'mathjs'
@@ -19,14 +20,11 @@ import globalStore from '@/store'
 
 export default function Component({
   viewId = 0,
-  links = { source: new Float32Array(), dest: new Float32Array() },
-  colorRampType = -1, // -1 undefined, 0 categorical, 1 diffs, 2 sequential
-  dark = false,
-  projection = '',
   scaleWidth = 1,
   mapIsIndependent = false,
   click = {} as any,
   paths = [] as any,
+  currentCoord = [] as number[],
 }) {
   // ------- draw frame begins here -----------------------------
 
@@ -80,8 +78,36 @@ export default function Component({
   // projection == 'Atlantis' ? COORDINATE_SYSTEM.METER_OFFSETS : COORDINATE_SYSTEM.DEFAULT
   const coordinateSystem = COORDINATE_SYSTEM.DEFAULT
 
+  const points = []
+  if (currentCoord.length) points.push({ coord: currentCoord, color: [255, 64, 128] })
+
   //@ts-ignore
-  const layer = new PathOffsetLayer({
+  const pointLayer = new ScatterplotLayer({
+    id: 'point-layer',
+    data: points,
+    radiusScale: 1.0,
+    radiusMinPixels: 12,
+    getPosition: (d: any) => d.coord,
+    getFillColor: (d: any) => d.color,
+    getRadius: 12,
+    opacity: 0.7,
+    radiusUnits: 'meters',
+  })
+
+  const labelLayer = new TextLayer({
+    id: 'label-layer',
+    data: [{ text: 'X', coordinates: currentCoord }],
+    getText: (d: any) => d.text,
+    getPosition: (d: any) => d.coordinates,
+    getColor: [255, 255, 255],
+    getSize: 20,
+    billboard: false,
+    fontFamily: 'sans-serif',
+    fontWeight: 'bold',
+  })
+
+  //@ts-ignore
+  const pathLayer = new PathOffsetLayer({
     id: 'pathLayer',
     data: paths,
     getPath: (d: any) => d.path,
@@ -120,7 +146,7 @@ export default function Component({
     /*
     //@ts-ignore */
     <DeckGL
-      layers={[layer]}
+      layers={[pathLayer, pointLayer, labelLayer]}
       viewState={viewState}
       controller={true}
       pickingRadius={5}

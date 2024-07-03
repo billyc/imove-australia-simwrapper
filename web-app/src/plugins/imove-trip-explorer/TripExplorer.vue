@@ -52,13 +52,14 @@
         :mapIsIndependent="vizDetails.mapIsIndependent"
         :click="handleClick"
         :paths="selectedPaths"
+        :currentCoord="currentCoord"
     )
 
     zoom-buttons.zoom-buttons(v-if="!thumbnail")
 
     .bottom-panel(v-if="!thumbnail")
       .status-message(v-if="myState.statusMessage")
-        p {{ myState.statusMessage }}
+        p: b {{ myState.statusMessage }}
 
 
 </template>
@@ -240,7 +241,7 @@ const MyComponent = defineComponent({
       },
       fixedColors: ['#4e79a7'],
       myState: {
-        statusMessage: '',
+        statusMessage: 'Select a point or intersection',
         subfolder: '',
         yamlConfig: '',
         thumbnail: false,
@@ -376,13 +377,13 @@ const MyComponent = defineComponent({
     async handleClick(event: any) {
       console.log('GOT YOU:', event)
       if (event.coordinate) {
+        this.currentCoord = event.coordinate
         await this.clickedCoordinate(event.coordinate)
         await this.runStatisticsForCoord(event.coordinate)
       }
     },
 
     async runStatisticsForCoord(coord: number[]) {
-      this.currentCoord = coord
       console.log('number of PATHS:', this.selectedPaths)
       const lonLo = coord[0] - this.radius
       const lonHi = coord[0] + this.radius
@@ -457,6 +458,8 @@ const MyComponent = defineComponent({
       let i = 0
       const tranchSize = 1000
 
+      this.myState.statusMessage = 'Fetching trips...'
+
       while (true) {
         console.log('loading tranch', i + 1)
 
@@ -466,6 +469,8 @@ const MyComponent = defineComponent({
         if (!trips.length && i == 0) {
           this.selectedPaths = []
           this.numTrips = 0
+          this.myState.statusMessage = 'No trips pass through that location, try again!'
+
           return
         }
 
@@ -493,6 +498,7 @@ const MyComponent = defineComponent({
 
       // GET FULL PATHS FOR SELECTED TRIPS
       this.numTrips = this.selectedPaths.length
+      this.myState.statusMessage = ''
     },
 
     setMapCenterFromVizDetails() {
@@ -683,12 +689,14 @@ export default MyComponent
 }
 
 .status-message {
-  margin: 0 0 0.5rem 0;
-  padding: 0.5rem 0.5rem;
+  margin: 0 auto 0.5rem auto;
+  padding: 0.5rem 2rem;
   color: var(--textFancy);
   background-color: var(--bgPanel);
   font-size: 1.2rem;
   line-height: 1.5rem;
+  border-radius: 5px;
+  border: 1px solid white;
 }
 
 .right-side {
