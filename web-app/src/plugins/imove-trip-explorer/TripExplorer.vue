@@ -5,9 +5,7 @@
 
   .details-panel
     h3.center RELIABILITY EXPLORER
-    p.center
-      br
-      | {{ numTrips ? '&nbsp;' : 'Select an intersection.' }}
+    p.center {{ numTrips ? '&nbsp;' : 'Select an intersection.' }}
 
     .statistics
       h3 Trips
@@ -36,7 +34,6 @@
     .reliability
       h3 Reliability
       p Speed by time of day
-      br
       p: b Average speed: {{ Math.round(10* avgSpeed) / 10 }}
 
       vue-plotly.myplot(v-if="speedData.length"
@@ -356,31 +353,24 @@ const MyComponent = defineComponent({
       this.vizDetails = Object.assign({}, this.vizDetails, this.standaloneYAMLconfig)
     },
 
-    async fetchWithAuthorization(url: string) {
-      const trips = (await fetch(url, {
-        headers: { Authorization: this.apiKey, 'Access-Control-Allow-Origin': '*' },
-      }).then(async response => {
-        if (response.status == 200) {
-          this.serverRetries = 0
-          return response.json()
-        }
-        if (response.status == 403) {
-          console.log(403)
-          // try again
-          this.serverRetries += 1
-          this.forceApiAuthorization()
-          return await this.fetchWithAuthorization(url)
-        } else if (this.serverRetries < 5) {
-          // wait 2 seconds and retry
-          this.serverRetries += 1
-          this.myState.statusMessage = `Contacting server... (${this.serverRetries})`
-          await new Promise(r => setTimeout(r, 2000))
-          return await this.fetchWithAuthorization(url)
-        }
-        throw Error('API ERROR: ' + response.statusText)
-      })) as any[]
+    /** Try multiple times to fetch, as server might be asleep */
+    async fetchWithAuthorization(url: string): Promise<any> {
+      console.log('fetchTrips attempt', this.serverRetries + 1)
 
-      return trips
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: this.apiKey,
+            'api-key': this.apiKey,
+            'Access-Control-Allow-Origin': '*',
+          },
+        })
+        return await response.json()
+      } catch (e) {
+        console.log('failed. auth?')
+        this.forceApiAuthorization()
+        return this.fetchWithAuthorization(url)
+      }
     },
 
     async handleClick(event: any) {
@@ -607,15 +597,6 @@ const MyComponent = defineComponent({
       localStorage.removeItem('imove-api-key')
       this.getApiAuthorization()
     },
-
-    async wakeUpServer() {
-      // this is a throwaway fetch that simply wakes up the API server when we load the site
-      try {
-        fetch(this.vizDetails.server)
-      } catch (e) {
-        // ignore
-      }
-    },
   },
 
   async mounted() {
@@ -626,11 +607,8 @@ const MyComponent = defineComponent({
     this.myState.subfolder = this.subfolder
 
     await this.getVizDetails()
-
-    this.wakeUpServer()
-
     this.setupLogoMover()
-    console.log('ok')
+    this.getApiAuthorization()
   },
 
   beforeDestroy() {
@@ -680,6 +658,7 @@ export default MyComponent
   // border-left: 1px solid #557;
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 .top-panel {
   pointer-events: auto;
@@ -785,8 +764,7 @@ input {
 }
 
 .reliability {
-  flex: 1;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .myplot {

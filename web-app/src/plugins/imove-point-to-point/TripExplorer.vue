@@ -772,7 +772,6 @@ const MyComponent = defineComponent({
     this.setupLogoMover()
 
     this.getApiAuthorization()
-    this.wakeUpServer()
   },
 
   beforeDestroy() {
