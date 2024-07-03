@@ -21,16 +21,16 @@ topNavBar:
     backgroundColor: '#333faa' # hex codes or CSS color names allowed
 
   logo:
-    image: '/data/imove.png'
+    image: '/data/unimelb-logo.svg'
     url: /data
-    stylei:
+    style:
       backgroundColor: '#333faa'
       padding: '2px 4px'
-      maxHeight: '3.25rem'
+      maxHeight: '5rem'
 
   left:
     - text: 'iMOVE Australia'
-      url: https://imove.billyc.cc
+      url: http://45.113.234.113/
       style:
         fontWeight: bold
         fontFamily: 'Roboto Slab'
