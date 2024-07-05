@@ -337,12 +337,16 @@ const MyComponent = defineComponent({
   },
   methods: {
     clearMap() {
-      this.startCoord = []
-      this.endCoord = []
       this.numTrips = 0
       this.numIntersectionsSelected = 0
+      this.avgSpeed = 0
+      this.startCoord = []
+      this.endCoord = []
       this.allPaths = []
       this.selectedPaths = []
+      this.speedData = []
+      this.boxplot = []
+      this.unfilteredTrips = []
     },
 
     toggleDay(i: number) {
@@ -448,6 +452,8 @@ const MyComponent = defineComponent({
     },
 
     runStatistics() {
+      if (!this.numTrips) return
+
       this.isStatisticking = true
 
       const distanceAndTime = [] as any[]
@@ -646,13 +652,11 @@ const MyComponent = defineComponent({
     async clickedCoordinate(coord: number[]) {
       if (this.numIntersectionsSelected == 0) this.startCoord = coord
       if (this.numIntersectionsSelected == 1) this.endCoord = coord
+
       this.numIntersectionsSelected++
 
       if (this.numIntersectionsSelected == 3) {
         this.clearMap()
-        this.speedData = []
-        this.boxplot = []
-        this.avgSpeed = 0
       }
 
       // all done if we do not have BOTH start and end selected
